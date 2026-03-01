@@ -20,6 +20,7 @@ REPORT_FILE="$(jq -r '.report_file // ""' "$SUMMARY_FILE")"
 DIFF_FILE="$(jq -r '.diff_file // ""' "$SUMMARY_FILE")"
 fail_count="$(jq -r '.fail // 0' "$SUMMARY_FILE")"
 comparable_parity_count="$(jq -r '.comparable_parity_records // 0' "$SUMMARY_FILE")"
+BUILD_ROOT="${BUILD_DIR:-build}"
 
 adapter_status="skip"
 if [[ "$comparable_parity_count" -eq 0 ]]; then
@@ -41,8 +42,14 @@ if [[ -f "$REPORT_FILE" ]]; then
     "$REPORT_FILE")"
 fi
 
-mkdir -p "$REPO_ROOT/build/conformance"
-ADAPTER_FILE="$REPO_ROOT/build/conformance/adapter_iso_${RUN_ID}.json"
+if [[ "$BUILD_ROOT" = /* ]]; then
+  ADAPTER_DIR="$BUILD_ROOT/conformance"
+else
+  ADAPTER_DIR="$REPO_ROOT/$BUILD_ROOT/conformance"
+fi
+
+mkdir -p "$ADAPTER_DIR"
+ADAPTER_FILE="$ADAPTER_DIR/adapter_iso_${RUN_ID}.json"
 
 jq -n \
   --arg run_id "$RUN_ID" \

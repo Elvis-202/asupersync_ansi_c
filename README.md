@@ -461,6 +461,33 @@ make fuzz-smoke
 make ci-embedded-matrix
 ```
 
+## Release Artifacts and Integrity
+
+Tag-driven release automation (`.github/workflows/release.yml`) emits deterministic
+asset bundles and integrity metadata per target.
+
+Per-target release contract:
+
+- `asx-<target>.tar.xz`
+- `asx-<target>.tar.xz.sha256`
+- `asx-<target>.tar.xz.sigstore.json`
+- `asx-<target>.provenance.json`
+
+Build artifacts locally:
+
+```bash
+# Binary package (libasx.a + public headers)
+make release-artifacts RELEASE_VERSION=0.1.0 RELEASE_TARGET=linux-x86_64 PROFILE=CORE CODEC=BIN DETERMINISTIC=1
+
+# Source package
+make release-artifacts RELEASE_VERSION=0.1.0 RELEASE_TARGET=source RELEASE_KIND=source
+```
+
+Notes:
+- `ASX_ENABLE_SIGSTORE=1` enables keyless Sigstore bundle generation when `cosign` is available.
+- `ASX_USE_RCH=auto` keeps local release builds compatible with remote build offload.
+- Operational release/rollback checklist: `docs/DEPLOYMENT_HARDENING.md` ("Release Verification and Rollback Runbook").
+
 ## Troubleshooting
 
 ### `ASX_E_RESOURCE_EXHAUSTED` during normal load

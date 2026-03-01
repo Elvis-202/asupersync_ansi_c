@@ -10,7 +10,7 @@ gate fails. Gate status is binary: **pass** or **fail**. There is no soft-pass.
 
 ## 1. Gate Inventory
 
-Nine mandatory gates from plan section 10.6, plus supplementary enforcement gates.
+Nine mandatory gates from plan section 10.6, plus release artifact integrity and supplementary enforcement gates.
 
 ### 1.1 Portability CI Gate
 
@@ -139,6 +139,20 @@ Nine mandatory gates from plan section 10.6, plus supplementary enforcement gate
 | **Rerun** | `make lint-anti-butchering` (proof blocks), `make conformance` (delta evaluation) |
 | **Failure action** | Add "Guarantee Impact" block to commit message. See `docs/PROOF_BLOCK_EXCEPTION_WORKFLOW.md` for exception process. |
 
+### 1.10 Release Artifact Integrity Gate
+
+| Field | Value |
+|-------|-------|
+| **Gate ID** | `GATE-RELEASE-INTEGRITY` |
+| **Plan ref** | `bd-56t.1` |
+| **Makefile targets** | `release-artifacts` |
+| **CI job** | `release-artifacts` (tag workflow) |
+| **Scripts** | `tools/ci/run_release_artifacts.sh` |
+| **Artifacts** | `build/release/dist/asx-*.tar.xz`, `build/release/dist/asx-*.tar.xz.sha256`, `build/release/dist/asx-*.tar.xz.sigstore.json`, `build/release/dist/asx-*.provenance.json`, `build/ci-manifests/release-artifacts.manifest.json` |
+| **Pass criteria** | Each release target emits deterministic tarball, checksum, sigstore bundle, and provenance metadata whose version maps to the release tag. |
+| **Rerun** | `make release-artifacts RELEASE_VERSION=<x.y.z> RELEASE_TARGET=linux-x86_64`, `make release-artifacts RELEASE_VERSION=<x.y.z> RELEASE_TARGET=source RELEASE_KIND=source` |
+| **Failure action** | Fix packaging/integrity generation before publishing; do not release partial asset sets. |
+
 ## 2. Supplementary Enforcement Gates
 
 These gates support the 9 mandatory gates above with additional static analysis
@@ -204,6 +218,12 @@ From `.github/workflows/perf.yml`:
 | Job | Trigger | Dependencies | Blocking |
 |-----|---------|-------------|----------|
 | `perf-tail-deadline` | push to main | — | Warn (threshold enforcement planned) |
+
+From `.github/workflows/release.yml`:
+
+| Job | Trigger | Dependencies | Blocking |
+|-----|---------|-------------|----------|
+| `release-artifacts` | push tag `v*` | — | Yes |
 
 ## 6. Enforcement Rules
 

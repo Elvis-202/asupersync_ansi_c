@@ -189,7 +189,7 @@ cc_bin="${CC:-cc}"
 read -r -a cflags_arr <<<"${CONFORMANCE_CFLAGS:- -std=c99 -Wall -Wextra -Wpedantic}"
 
 echo "[asx] conformance[$MODE]: build + smoke gate..." >&2
-if ! make -C "$REPO_ROOT" build >"$BUILD_LOG" 2>&1; then
+if ! make -C "$REPO_ROOT" build "BUILD_DIR=$BUILD_DIR" >"$BUILD_LOG" 2>&1; then
   jq -n -c \
     --arg run_id "$RUN_ID" \
     --arg mode "$MODE" \

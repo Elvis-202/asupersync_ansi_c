@@ -1,0 +1,151 @@
+# =============================================================================
+# release.yml — tag-driven release artifacts and integrity bundles (bd-56t.1)
+# =============================================================================
+
+name: Release Artifacts
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+  id-token: write
+
+env:
+  CI: 1
+  ASX_CI_RUN_TAG: "${{ github.run_id }}-${{ github.run_attempt }}"
+  ASX_CI_ARTIFACT_ROOT: build/ci-manifests
+
+jobs:
+  release-artifacts:
+    name: "release artifacts + checksums + signatures"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq jq xz-utils
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Build release artifact bundles
+        id: build_release_artifacts
+        env:
+          ASX_ENABLE_SIGSTORE: "1"
+          ASX_USE_RCH: "0"
+          ASX_RELEASE_TAG: "${{ github.ref_name }}"
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          source_date_epoch="$(git log -1 --format=%ct)"
+
+          tools/ci/run_release_artifacts.sh \
+            --version "$version" \
+            --target linux-x86_64 \
+            --kind binary \
+            --profile CORE \
+            --codec BIN \
+            --deterministic 1 \
+            --source-date-epoch "$source_date_epoch"
+
+          tools/ci/run_release_artifacts.sh \
+            --version "$version" \
+            --target source \
+            --kind source \
+            --source-date-epoch "$source_date_epoch"
+
+      - name: Validate release artifact contract
+        id: validate_release_artifacts
+        run: |
+          set -euo pipefail
+          for target in linux-x86_64 source; do
+            base="build/release/dist/asx-${target}.tar.xz"
+            test -s "${base}"
+            test -s "${base}.sha256"
+            test -s "${base}.sigstore.json"
+            test -s "build/release/dist/asx-${target}.provenance.json"
+          done
+
+      - name: Emit release lane manifest
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p "${ASX_CI_ARTIFACT_ROOT}"
+
+          lane="release-artifacts"
+          first_failure=""
+          rerun=""
+
+          if [ "${{ steps.build_release_artifacts.outcome }}" = "failure" ]; then
+            first_failure="build-release-artifacts"
+            rerun="tools/ci/run_release_artifacts.sh --help"
+          elif [ "${{ steps.validate_release_artifacts.outcome }}" = "failure" ]; then
+            first_failure="validate-release-artifacts"
+            rerun="ls -l build/release/dist"
+          fi
+
+          status="pass"
+          if [ -n "$first_failure" ]; then
+            status="fail"
+          fi
+
+          artifacts_json="$(find build/release/dist -maxdepth 1 -type f -printf '%f\n' | sort | jq -R . | jq -s .)"
+
+          jq -n \
+            --arg lane "$lane" \
+            --arg status "$status" \
+            --arg run_tag "${{ env.ASX_CI_RUN_TAG }}" \
+            --arg workflow "${{ github.workflow }}" \
+            --arg sha "${{ github.sha }}" \
+            --arg ref "${{ github.ref }}" \
+            --arg tag "${{ github.ref_name }}" \
+            --arg build_outcome "${{ steps.build_release_artifacts.outcome }}" \
+            --arg validate_outcome "${{ steps.validate_release_artifacts.outcome }}" \
+            --arg first_failure "$first_failure" \
+            --arg rerun "$rerun" \
+            --argjson artifacts "$artifacts_json" \
+            '{
+              lane: $lane,
+              status: $status,
+              run_tag: $run_tag,
+              workflow: $workflow,
+              sha: $sha,
+              ref: $ref,
+              tag: $tag,
+              artifacts: $artifacts,
+              steps: [
+                {id: "build-release-artifacts", outcome: $build_outcome, rerun: "tools/ci/run_release_artifacts.sh --help"},
+                {id: "validate-release-artifacts", outcome: $validate_outcome, rerun: "ls -l build/release/dist"}
+              ],
+              first_failure: (if $first_failure == "" then null else {step: $first_failure, rerun: $rerun} end)
+            }' > "${ASX_CI_ARTIFACT_ROOT}/${lane}.manifest.json"
+
+      - name: Upload release artifacts bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-artifacts-${{ env.ASX_CI_RUN_TAG }}
+          path: |
+            build/release/dist/
+            ${{ env.ASX_CI_ARTIFACT_ROOT }}/release-artifacts.manifest.json
+          retention-days: 30
+
+      - name: Publish GitHub release assets
+        if: success()
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            build/release/dist/asx-*.tar.xz
+            build/release/dist/asx-*.tar.xz.sha256
+            build/release/dist/asx-*.tar.xz.sigstore.json
+            build/release/dist/asx-*.provenance.json
+            ${{ env.ASX_CI_ARTIFACT_ROOT }}/release-artifacts.manifest.json

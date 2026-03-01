@@ -223,3 +223,107 @@ build/test-logs/
   e2e-market-open-burst.jsonl
   e2e-automotive-fault-burst.jsonl
 ```
+
+## Release Verification and Rollback Runbook
+
+This runbook is the operational gate for publishing or promoting any ASX release.
+It is deterministic-by-default and references artifact classes emitted by:
+
+- `.github/workflows/release.yml`
+- `tools/ci/run_release_artifacts.sh`
+- `tests/e2e/run_all.sh`
+
+### Release Classes
+
+| Class | Typical change scope | Approval bar |
+|------|-----------------------|--------------|
+| Patch (`vX.Y.Z+1`) | Bug fix, no intended semantic surface change | Maintainer + all required checks green |
+| Minor (`vX.Y+1.0`) | New capability with preserved contracts | Maintainer + full gate bundle + profile smoke |
+| Major (`vX+1.0.0`) | Intentional contract/semantic break | Maintainer + explicit migration notes + full parity evidence |
+
+### Required Pre-Publish Checklist
+
+1. Build deterministic release artifacts:
+   - `make release-artifacts RELEASE_VERSION=<x.y.z> RELEASE_TARGET=linux-x86_64 PROFILE=CORE CODEC=BIN DETERMINISTIC=1`
+   - `make release-artifacts RELEASE_VERSION=<x.y.z> RELEASE_TARGET=source RELEASE_KIND=source`
+2. Verify integrity files exist for each target:
+   - `asx-<target>.tar.xz`
+   - `asx-<target>.tar.xz.sha256`
+   - `asx-<target>.tar.xz.sigstore.json`
+   - `asx-<target>.provenance.json`
+3. Verify checksums locally:
+   - `(cd build/release/dist && sha256sum -c asx-<target>.tar.xz.sha256)`
+4. Verify mandatory evidence gates:
+   - `make test-e2e-suite`
+   - `make conformance`
+   - `make profile-parity`
+5. Confirm structured logs and manifests are present:
+   - `build/e2e-artifacts/*/run_manifest.json`
+   - `build/test-logs/e2e-*.jsonl`
+   - `tools/ci/artifacts/conformance/*-conformance.summary.json`
+   - `tools/ci/artifacts/conformance/*-profile-parity.summary.json`
+   - `build/ci-manifests/*.manifest.json` (CI lane manifests)
+6. Ensure release tag and provenance alignment:
+   - tag `vX.Y.Z` matches `version` in `asx-*.provenance.json`
+   - provenance `git.sha` matches release commit
+
+### Profile-Specific Smoke Requirements
+
+| Profile | Minimum smoke command | Required output |
+|---------|-----------------------|-----------------|
+| CORE | `ASX_E2E_PROFILE=CORE ./tests/e2e/core_lifecycle.sh` | `core-lifecycle.summary.json` |
+| EMBEDDED_ROUTER | `ASX_E2E_PROFILE=EMBEDDED_ROUTER ./tests/e2e/router_storm.sh` | `router-storm.summary.json` |
+| HFT | `ASX_E2E_PROFILE=HFT ./tests/e2e/market_open_burst.sh` | `market-open-burst.summary.json` |
+| AUTOMOTIVE | `ASX_E2E_PROFILE=AUTOMOTIVE ./tests/e2e/automotive_fault_burst.sh` | `automotive-fault-burst.summary.json` |
+
+### Rollback Triggers
+
+Rollback is mandatory when any trigger below occurs after publish or canary deploy:
+
+| Trigger | Signal source | Action deadline |
+|---------|---------------|-----------------|
+| Missing/invalid release integrity file | release artifact verification | Immediate |
+| Checksum mismatch | `sha256sum -c` failure | Immediate |
+| Sigstore verification failure | sigstore bundle verification | Immediate |
+| Replay digest drift on same seed/profile | continuity/replay checks | < 30 minutes |
+| Non-budgetable semantic delta | conformance summary | Immediate |
+| Critical e2e lane failure in canary | e2e `run_manifest.json` | Immediate |
+
+### Rollback Procedure
+
+1. Freeze promotion and traffic expansion.
+2. Identify last known-good release tag `vA.B.C`.
+3. Re-publish/re-point deployment artifacts to `vA.B.C` bundle.
+4. Run post-rollback verification:
+   - `ASX_E2E_PROFILE=CORE ./tests/e2e/continuity_restart.sh`
+   - `make conformance`
+5. Record rollback incident metadata:
+   - triggering signal,
+   - failed release tag,
+   - restored release tag,
+   - evidence artifact paths.
+
+### Fast Rollback by Class
+
+| Class | Rollback scope | Required validation |
+|------|----------------|---------------------|
+| Patch | Restore previous patch tag only | CORE + changed-profile smoke |
+| Minor | Restore prior minor line | CORE + all vertical profile smokes |
+| Major | Full rollback + freeze new rollout | Full suite (`test-e2e-suite`, `conformance`, `profile-parity`) |
+
+### Post-Deploy Incident Response References
+
+- Replay identity check:
+  - `asx replay --trace <trace.json> --verify-digest`
+- Rust fixture parity check:
+  - `asx conformance rust-parity --fixtures fixtures/rust_reference`
+- Cross-profile parity check:
+  - `asx conformance profile-parity --scenario scenarios/all`
+
+### Dry-Run Validation Record
+
+Dry-run performed on `2026-03-01`:
+
+1. `tools/ci/run_release_artifacts.sh --version 0.0.0-dev --target source --kind source --source-date-epoch 1700000000`
+2. `tools/ci/run_release_artifacts.sh --version 0.0.0-dev --target linux-x86_64 --kind binary --profile CORE --codec BIN --deterministic 1 --source-date-epoch 1700000000 --skip-build`
+3. `(cd build/release/dist && sha256sum -c asx-source.tar.xz.sha256 && sha256sum -c asx-linux-x86_64.tar.xz.sha256)`
