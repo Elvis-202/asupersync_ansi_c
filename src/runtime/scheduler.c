@@ -131,6 +131,7 @@ asx_status asx_scheduler_run(asx_region_id region, asx_budget *budget)
                 (void)asx_ghost_check_task_transition(tid, t->state,
                                                       ASX_TASK_COMPLETED);
                 t->state = ASX_TASK_COMPLETED;
+                t->cancel_phase = ASX_CANCEL_PHASE_COMPLETED;
                 t->outcome = asx_outcome_make(ASX_OUTCOME_CANCELLED);
                 asx_task_release_capture_internal(t);
                 rslot->task_count--;
@@ -195,6 +196,7 @@ asx_status asx_scheduler_run(asx_region_id region, asx_budget *budget)
                 (void)asx_ghost_check_task_transition(tid, t->state, ASX_TASK_COMPLETED);
                 t->state = ASX_TASK_COMPLETED;
                 if (t->cancel_pending) {
+                    t->cancel_phase = ASX_CANCEL_PHASE_COMPLETED;
                     t->outcome = asx_outcome_make(ASX_OUTCOME_CANCELLED);
                 } else {
                     t->outcome = asx_outcome_make(ASX_OUTCOME_OK);
@@ -211,6 +213,7 @@ asx_status asx_scheduler_run(asx_region_id region, asx_budget *budget)
                 (void)asx_ghost_check_task_transition(tid, t->state, ASX_TASK_COMPLETED);
                 t->state = ASX_TASK_COMPLETED;
                 if (t->cancel_pending) {
+                    t->cancel_phase = ASX_CANCEL_PHASE_COMPLETED;
                     t->outcome = asx_outcome_make(ASX_OUTCOME_CANCELLED);
                 } else {
                     t->outcome = asx_outcome_make(ASX_OUTCOME_ERR);

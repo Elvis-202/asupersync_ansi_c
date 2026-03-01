@@ -337,6 +337,7 @@ TEST(cancelled_task_completion_gets_cancelled_outcome) {
     asx_region_id rid;
     asx_task_id tid;
     asx_outcome out;
+    asx_cancel_phase phase;
     asx_budget budget;
 
     asx_runtime_reset();
@@ -357,6 +358,8 @@ TEST(cancelled_task_completion_gets_cancelled_outcome) {
 
     ASSERT_EQ(asx_task_get_outcome(tid, &out), ASX_OK);
     ASSERT_EQ((int)out.severity, (int)ASX_OUTCOME_CANCELLED);
+    ASSERT_EQ(asx_task_get_cancel_phase(tid, &phase), ASX_OK);
+    ASSERT_EQ((int)phase, (int)ASX_CANCEL_PHASE_COMPLETED);
 }
 
 /* -------------------------------------------------------------------
@@ -368,6 +371,7 @@ TEST(cleanup_budget_exhaustion_forces_completion) {
     asx_task_id tid;
     asx_task_state state;
     asx_outcome out;
+    asx_cancel_phase phase;
     asx_budget budget;
     asx_checkpoint_result cr;
 
@@ -399,6 +403,8 @@ TEST(cleanup_budget_exhaustion_forces_completion) {
 
     ASSERT_EQ(asx_task_get_outcome(tid, &out), ASX_OK);
     ASSERT_EQ((int)out.severity, (int)ASX_OUTCOME_CANCELLED);
+    ASSERT_EQ(asx_task_get_cancel_phase(tid, &phase), ASX_OK);
+    ASSERT_EQ((int)phase, (int)ASX_CANCEL_PHASE_COMPLETED);
 }
 
 /* -------------------------------------------------------------------
@@ -474,6 +480,12 @@ TEST(cancel_phase_query_tracks_progression) {
     ASSERT_EQ(asx_task_finalize(tid), ASX_OK);
     ASSERT_EQ(asx_task_get_cancel_phase(tid, &phase), ASX_OK);
     ASSERT_EQ((int)phase, (int)ASX_CANCEL_PHASE_FINALIZING);
+
+    /* After scheduler completion — should be COMPLETED */
+    budget = asx_budget_from_polls(10);
+    ASSERT_EQ(asx_scheduler_run(rid, &budget), ASX_OK);
+    ASSERT_EQ(asx_task_get_cancel_phase(tid, &phase), ASX_OK);
+    ASSERT_EQ((int)phase, (int)ASX_CANCEL_PHASE_COMPLETED);
 }
 
 /* -------------------------------------------------------------------

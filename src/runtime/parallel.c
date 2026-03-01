@@ -15,6 +15,7 @@
 #include <asx/asx_config.h>
 #include <asx/core/transition.h>
 #include <asx/core/cancel.h>
+#include <asx/core/ghost.h>
 #include "runtime_internal.h"
 #include <string.h>
 
@@ -207,8 +208,9 @@ static void compute_lane_quotas(uint32_t total_budget,
         }
         for (i = 0; i < ASX_MAX_LANES; i++) {
             if (g_lanes[i].count > 0 && total_weight > 0) {
-                quotas[i] = (total_budget * g_config.lane_weights[i])
-                            / total_weight;
+                quotas[i] = (uint32_t)(
+                    (uint64_t)total_budget * g_config.lane_weights[i]
+                    / total_weight);
             } else {
                 quotas[i] = 0;
             }
@@ -401,7 +403,20 @@ asx_status asx_parallel_run(asx_region_id region, asx_budget *budget)
                     (t->state == ASX_TASK_CANCELLING ||
                      t->state == ASX_TASK_CANCEL_REQUESTED) &&
                     t->cleanup_polls_remaining == 0) {
+                    if (t->state == ASX_TASK_CANCEL_REQUESTED) {
+                        (void)asx_ghost_check_task_transition(tid, t->state,
+                                                              ASX_TASK_CANCELLING);
+                        t->state = ASX_TASK_CANCELLING;
+                        t->cancel_phase = ASX_CANCEL_PHASE_CANCELLING;
+                    }
+                    (void)asx_ghost_check_task_transition(tid, t->state,
+                                                          ASX_TASK_FINALIZING);
+                    t->state = ASX_TASK_FINALIZING;
+                    t->cancel_phase = ASX_CANCEL_PHASE_FINALIZING;
+                    (void)asx_ghost_check_task_transition(tid, t->state,
+                                                          ASX_TASK_COMPLETED);
                     t->state = ASX_TASK_COMPLETED;
+                    t->cancel_phase = ASX_CANCEL_PHASE_COMPLETED;
                     t->outcome = asx_outcome_make(ASX_OUTCOME_CANCELLED);
                     asx_task_release_capture_internal(t);
                     rslot->task_count--;
@@ -413,7 +428,10 @@ asx_status asx_parallel_run(asx_region_id region, asx_budget *budget)
                 }
 
                 if (t->state == ASX_TASK_FINALIZING) {
+                    (void)asx_ghost_check_task_transition(tid, t->state,
+                                                          ASX_TASK_COMPLETED);
                     t->state = ASX_TASK_COMPLETED;
+                    t->cancel_phase = ASX_CANCEL_PHASE_COMPLETED;
                     t->outcome = asx_outcome_make(ASX_OUTCOME_CANCELLED);
                     asx_task_release_capture_internal(t);
                     rslot->task_count--;
@@ -431,6 +449,8 @@ asx_status asx_parallel_run(asx_region_id region, asx_budget *budget)
 
                 /* Transition Created → Running */
                 if (t->state == ASX_TASK_CREATED) {
+                    (void)asx_ghost_check_task_transition(tid, t->state,
+                                                          ASX_TASK_RUNNING);
                     t->state = ASX_TASK_RUNNING;
                 }
 
@@ -443,7 +463,12 @@ asx_status asx_parallel_run(asx_region_id region, asx_budget *budget)
                 any_polled = 1;
 
                 if (poll_result == ASX_OK) {
+                    (void)asx_ghost_check_task_transition(tid, t->state,
+                                                          ASX_TASK_COMPLETED);
                     t->state = ASX_TASK_COMPLETED;
+                    if (t->cancel_pending) {
+                        t->cancel_phase = ASX_CANCEL_PHASE_COMPLETED;
+                    }
                     t->outcome = asx_outcome_make(
                         t->cancel_pending ? ASX_OUTCOME_CANCELLED
                                           : ASX_OUTCOME_OK);
@@ -455,7 +480,12 @@ asx_status asx_parallel_run(asx_region_id region, asx_budget *budget)
                                    (uint64_t)tid, round);
                     continue;
                 } else if (poll_result != ASX_E_PENDING) {
+                    (void)asx_ghost_check_task_transition(tid, t->state,
+                                                          ASX_TASK_COMPLETED);
                     t->state = ASX_TASK_COMPLETED;
+                    if (t->cancel_pending) {
+                        t->cancel_phase = ASX_CANCEL_PHASE_COMPLETED;
+                    }
                     t->outcome = asx_outcome_make(
                         t->cancel_pending ? ASX_OUTCOME_CANCELLED
                                           : ASX_OUTCOME_ERR);

@@ -42,6 +42,24 @@ static asx_status poll_fail(void *data, asx_task_id self) {
     return ASX_E_INVALID_STATE;
 }
 
+static asx_status poll_checkpoint_then_complete(void *data, asx_task_id self) {
+    asx_checkpoint_result cr;
+    (void)data;
+    if (asx_checkpoint(self, &cr) == ASX_OK && cr.cancelled) {
+        return ASX_OK;
+    }
+    return ASX_E_PENDING;
+}
+
+static asx_status poll_checkpoint_forever(void *data, asx_task_id self) {
+    asx_checkpoint_result cr;
+    asx_status cst;
+    (void)data;
+    cst = asx_checkpoint(self, &cr);
+    (void)cst;
+    return ASX_E_PENDING;
+}
+
 static int g_parallel_dtor_calls;
 static uint32_t g_parallel_dtor_last_size;
 
@@ -277,6 +295,74 @@ TEST(parallel_run_task_yields_then_completes) {
 
     budget = asx_budget_from_polls(100);
     ASSERT_EQ(asx_parallel_run(rid, &budget), ASX_OK);
+
+    asx_parallel_reset();
+}
+
+TEST(parallel_run_cancelled_task_sets_completed_cancel_phase) {
+    asx_region_id rid;
+    asx_task_id tid;
+    asx_budget budget;
+    asx_parallel_config cfg = default_config();
+    asx_outcome out;
+    asx_cancel_phase phase;
+
+    reset_all();
+    ASSERT_EQ(asx_parallel_init(&cfg), ASX_OK);
+
+    ASSERT_EQ(asx_region_open(&rid), ASX_OK);
+    ASSERT_EQ(asx_task_spawn(rid, poll_checkpoint_then_complete, NULL, &tid), ASX_OK);
+
+    /* First poll transitions CREATED->RUNNING and returns PENDING. */
+    budget = asx_budget_from_polls(1);
+    ASSERT_EQ(asx_parallel_run(rid, &budget), ASX_E_POLL_BUDGET_EXHAUSTED);
+
+    ASSERT_EQ(asx_task_cancel(tid, ASX_CANCEL_USER), ASX_OK);
+
+    budget = asx_budget_from_polls(20);
+    ASSERT_EQ(asx_parallel_run(rid, &budget), ASX_OK);
+
+    ASSERT_EQ(asx_task_get_outcome(tid, &out), ASX_OK);
+    ASSERT_EQ((int)out.severity, (int)ASX_OUTCOME_CANCELLED);
+    ASSERT_EQ(asx_task_get_cancel_phase(tid, &phase), ASX_OK);
+    ASSERT_EQ((int)phase, (int)ASX_CANCEL_PHASE_COMPLETED);
+
+    asx_parallel_reset();
+}
+
+TEST(parallel_run_finalizing_task_sets_completed_cancel_phase) {
+    asx_region_id rid;
+    asx_task_id tid;
+    asx_budget budget;
+    asx_parallel_config cfg = default_config();
+    asx_cancel_phase phase;
+    asx_checkpoint_result cr;
+    asx_task_state state;
+
+    reset_all();
+    ASSERT_EQ(asx_parallel_init(&cfg), ASX_OK);
+
+    ASSERT_EQ(asx_region_open(&rid), ASX_OK);
+    ASSERT_EQ(asx_task_spawn(rid, poll_checkpoint_forever, NULL, &tid), ASX_OK);
+
+    budget = asx_budget_from_polls(1);
+    ASSERT_EQ(asx_parallel_run(rid, &budget), ASX_E_POLL_BUDGET_EXHAUSTED);
+
+    ASSERT_EQ(asx_task_cancel(tid, ASX_CANCEL_USER), ASX_OK);
+    ASSERT_EQ(asx_checkpoint(tid, &cr), ASX_OK);
+    ASSERT_TRUE(cr.cancelled);
+    ASSERT_EQ(asx_task_finalize(tid), ASX_OK);
+
+    ASSERT_EQ(asx_task_get_state(tid, &state), ASX_OK);
+    ASSERT_EQ((int)state, (int)ASX_TASK_FINALIZING);
+
+    budget = asx_budget_from_polls(10);
+    ASSERT_EQ(asx_parallel_run(rid, &budget), ASX_OK);
+
+    ASSERT_EQ(asx_task_get_state(tid, &state), ASX_OK);
+    ASSERT_EQ((int)state, (int)ASX_TASK_COMPLETED);
+    ASSERT_EQ(asx_task_get_cancel_phase(tid, &phase), ASX_OK);
+    ASSERT_EQ((int)phase, (int)ASX_CANCEL_PHASE_COMPLETED);
 
     asx_parallel_reset();
 }
@@ -724,6 +810,8 @@ int main(void) {
     /* Parallel run */
     RUN_TEST(parallel_run_single_task_completes);
     RUN_TEST(parallel_run_task_yields_then_completes);
+    RUN_TEST(parallel_run_cancelled_task_sets_completed_cancel_phase);
+    RUN_TEST(parallel_run_finalizing_task_sets_completed_cancel_phase);
     RUN_TEST(parallel_run_task_fails);
     RUN_TEST(parallel_run_captured_state_dtor_on_complete);
     RUN_TEST(parallel_run_budget_exhaustion);
