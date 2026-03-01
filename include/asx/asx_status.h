@@ -102,7 +102,11 @@ typedef enum {
     ASX_E_EQUIVALENCE_MISMATCH = 1400,  /* cross-codec semantic mismatch */
 
     /* Trace/replay errors (15xx) */
-    ASX_E_REPLAY_MISMATCH      = 1500   /* replay continuity check failed */
+    ASX_E_REPLAY_MISMATCH      = 1500,  /* replay continuity check failed */
+
+    /* 16xx: config reload errors */
+    ASX_E_CONFIG_FROZEN        = 1600,  /* attempted to change frozen field */
+    ASX_E_CONFIG_RESTART_REQ   = 1601   /* field requires restart to change */
 
 } asx_status;
 

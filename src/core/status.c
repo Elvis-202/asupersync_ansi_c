@@ -180,6 +180,8 @@ const char *asx_status_str(asx_status s)
     case ASX_E_AFFINITY_TABLE_FULL:       return "affinity tracking table full";
     case ASX_E_EQUIVALENCE_MISMATCH:     return "cross-codec semantic equivalence mismatch";
     case ASX_E_REPLAY_MISMATCH:          return "replay continuity mismatch";
+    case ASX_E_CONFIG_FROZEN:            return "config field is frozen";
+    case ASX_E_CONFIG_RESTART_REQ:       return "config field requires restart";
     default:                              return "unknown status";
     }
 }
