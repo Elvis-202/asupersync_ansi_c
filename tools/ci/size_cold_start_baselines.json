@@ -1,0 +1,91 @@
+{
+  "schema": "asx.size_cold_start_baselines.v1",
+  "description": "Per-profile binary-size and cold-start SLO baselines. Gate fails when any metric exceeds its budget. Baselines captured from deterministic release builds on reference hardware.",
+  "governance": {
+    "update_policy": "Baseline changes require explicit rationale in commit message and must reference the build/bench run that justifies the new values. Use 'make release && size build/lib/libasx.a' and 'make bench-json' to capture new baselines.",
+    "tolerance_policy": "Size budgets use headroom multipliers to absorb compiler version differences, new features, and CI variance. Cold-start budgets use larger headroom due to OS scheduling noise.",
+    "approval_required": true,
+    "audit_trail": [
+      {
+        "date": "2026-03-01",
+        "author": "FoggyForge",
+        "action": "initial_capture",
+        "rationale": "First size/cold-start baseline from CORE profile release build on development host (x86_64, GCC). Archive size budget set to 2x baseline to allow feature growth. Text budget set to 1.5x for tighter code-size control. Cold-start budgets use 10x headroom for CI runner variance.",
+        "commit": "pending"
+      }
+    ]
+  },
+  "profiles": {
+    "CORE": {
+      "captured_at": "2026-03-01T05:30:00Z",
+      "captured_on": "development-host",
+      "compiler": "gcc",
+      "target": "x86_64-linux-gnu",
+      "optimization": "-O2",
+      "size_metrics": {
+        "archive_bytes": {
+          "budget": 1250000,
+          "headroom": 2.0,
+          "baseline": 625260,
+          "description": "Total libasx.a archive size"
+        },
+        "text_bytes": {
+          "budget": 160000,
+          "headroom": 1.5,
+          "baseline": 107596,
+          "description": "Total .text section (executable code)"
+        },
+        "data_bytes": {
+          "budget": 10000,
+          "headroom": 5.9,
+          "baseline": 1688,
+          "description": "Total .data section (initialized globals)"
+        },
+        "bss_bytes": {
+          "budget": 500000,
+          "headroom": 1.6,
+          "baseline": 306136,
+          "description": "Total .bss section (zero-initialized globals)"
+        }
+      },
+      "cold_start_metrics": {
+        "init_p99_ns": {
+          "budget": 15000,
+          "headroom": 10.7,
+          "baseline": 1400,
+          "description": "p99 runtime_reset + region_open latency"
+        },
+        "init_p99_9_ns": {
+          "budget": 75000,
+          "headroom": 10.0,
+          "baseline": 7500,
+          "description": "p99.9 runtime_reset + region_open latency"
+        },
+        "first_task_p99_ns": {
+          "budget": 15000,
+          "headroom": 10.0,
+          "baseline": 1500,
+          "description": "p99 full cold-start to first task completion"
+        },
+        "first_task_p99_9_ns": {
+          "budget": 80000,
+          "headroom": 10.1,
+          "baseline": 7900,
+          "description": "p99.9 full cold-start to first task completion"
+        },
+        "init_jitter_ns": {
+          "budget": 500,
+          "headroom": 10.9,
+          "baseline": 46,
+          "description": "MAD of init latency"
+        },
+        "first_task_jitter_ns": {
+          "budget": 700,
+          "headroom": 11.3,
+          "baseline": 62,
+          "description": "MAD of first-task-complete latency"
+        }
+      }
+    }
+  }
+}

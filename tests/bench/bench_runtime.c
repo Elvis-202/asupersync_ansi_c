@@ -847,6 +847,70 @@ static bench_adaptive_report bench_adaptive_metrics(void)
 }
 
 /* -------------------------------------------------------------------
+ * Cold-start report — measures full init-to-first-completion path
+ *
+ * Captures the latency of the first-use initialization sequence that
+ * embedded and cold-start-sensitive deployments experience on boot.
+ * ------------------------------------------------------------------- */
+
+typedef struct {
+    uint64_t init_p99_ns;        /* p99 of runtime_reset + region_open */
+    uint64_t init_p99_9_ns;
+    uint64_t first_task_p99_ns;  /* p99 of full cold-start-to-completion */
+    uint64_t first_task_p99_9_ns;
+    uint64_t init_jitter_ns;
+    uint64_t first_task_jitter_ns;
+    uint32_t samples;
+} bench_cold_start_report;
+
+static bench_cold_start_report bench_cold_start(void)
+{
+    bench_cold_start_report rpt;
+    bench_samples init_s;
+    bench_samples full_s;
+    bench_stats init_st;
+    bench_stats full_st;
+    uint32_t iter;
+
+    bench_samples_init(&init_s);
+    bench_samples_init(&full_s);
+
+    for (iter = 0; iter < 5000u; iter++) {
+        asx_region_id rid;
+        asx_task_id tid;
+        asx_budget budget;
+        uint64_t t0, t1, t2;
+
+        t0 = bench_now_ns();
+        asx_runtime_reset();
+        (void)asx_region_open(&rid);
+        t1 = bench_now_ns();
+
+        (void)asx_task_spawn(rid, noop_poll, NULL, &tid);
+        budget = asx_budget_from_polls(64);
+        (void)asx_scheduler_run(rid, &budget);
+        t2 = bench_now_ns();
+
+        bench_samples_add(&init_s, t1 - t0);
+        bench_samples_add(&full_s, t2 - t0);
+    }
+
+    init_st = bench_compute_stats(&init_s);
+    full_st = bench_compute_stats(&full_s);
+
+    memset(&rpt, 0, sizeof(rpt));
+    rpt.init_p99_ns = init_st.p99;
+    rpt.init_p99_9_ns = init_st.p99_9;
+    rpt.init_jitter_ns = init_st.jitter;
+    rpt.first_task_p99_ns = full_st.p99;
+    rpt.first_task_p99_9_ns = full_st.p99_9;
+    rpt.first_task_jitter_ns = full_st.jitter;
+    rpt.samples = init_st.count;
+
+    return rpt;
+}
+
+/* -------------------------------------------------------------------
  * Main — run all benchmarks and emit JSON report
  * ------------------------------------------------------------------- */
 
@@ -1008,7 +1072,29 @@ int main(int argc, char **argv)
     printf("    \"ledger_count\": %" PRIu32 ",\n", adr.ledger_count);
     printf("    \"ledger_overflowed\": %s\n",
            adr.ledger_overflowed ? "true" : "false");
-    printf("  }\n");
+    printf("  },\n");
+
+    /* Cold-start report */
+    {
+        bench_cold_start_report csr;
+
+        if (!json_only) fprintf(stderr, "  cold_start... ");
+        csr = bench_cold_start();
+        if (!json_only) {
+            fprintf(stderr, "done (init_p99=%" PRIu64 "ns, first_task_p99=%" PRIu64 "ns)\n",
+                    csr.init_p99_ns, csr.first_task_p99_ns);
+        }
+
+        printf("  \"cold_start_report\": {\n");
+        printf("    \"samples\": %" PRIu32 ",\n", csr.samples);
+        printf("    \"init_p99_ns\": %" PRIu64 ",\n", csr.init_p99_ns);
+        printf("    \"init_p99_9_ns\": %" PRIu64 ",\n", csr.init_p99_9_ns);
+        printf("    \"init_jitter_ns\": %" PRIu64 ",\n", csr.init_jitter_ns);
+        printf("    \"first_task_p99_ns\": %" PRIu64 ",\n", csr.first_task_p99_ns);
+        printf("    \"first_task_p99_9_ns\": %" PRIu64 ",\n", csr.first_task_p99_9_ns);
+        printf("    \"first_task_jitter_ns\": %" PRIu64 "\n", csr.first_task_jitter_ns);
+        printf("  }\n");
+    }
 
     printf("}\n");
 

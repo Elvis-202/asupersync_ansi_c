@@ -60,6 +60,13 @@ else
 endif
 
 # ---------------------------------------------------------------------------
+# Release artifact packaging defaults
+# ---------------------------------------------------------------------------
+RELEASE_TARGET ?= linux-x86_64
+RELEASE_KIND ?= binary
+RELEASE_VERSION ?=
+
+# ---------------------------------------------------------------------------
 # Cross-compilation support
 # Usage: make release TARGET=mipsel-openwrt-linux-musl
 # ---------------------------------------------------------------------------
@@ -117,7 +124,8 @@ CORE_SRC := \
 	src/core/cleanup.c \
 	src/core/ghost.c \
 	src/core/affinity.c \
-	src/core/adaptive.c
+	src/core/adaptive.c \
+	src/core/abi.c
 
 RUNTIME_SRC := \
 	src/runtime/hooks.c \
@@ -240,10 +248,10 @@ E2E_VERTICAL_SCRIPTS := \
 .PHONY: all build clean install uninstall
 .PHONY: format-check lint lint-docs lint-checkpoint lint-anti-butchering lint-evidence lint-semantic-delta lint-static-analysis
 .PHONY: model-check
-.PHONY: test test-unit test-invariants test-vignettes test-e2e test-e2e-vertical
+.PHONY: test test-unit test-invariants test-vignettes test-e2e test-e2e-vertical test-abi-shim abi-check
 .PHONY: conformance codec-equivalence profile-parity
 .PHONY: fuzz-smoke ci-embedded-matrix
-.PHONY: release bench
+.PHONY: release release-artifacts bench
 .PHONY: build-gcc build-clang build-msvc build-32 build-64
 .PHONY: build-embedded-mipsel build-embedded-armv7 build-embedded-aarch64
 .PHONY: qemu-smoke
@@ -499,6 +507,31 @@ test-vignettes: $(VIGNETTE_TEST_BIN)
 	fi
 
 # ---------------------------------------------------------------------------
+# test-abi-shim — consumer ABI/API stability verification (bd-56t.4)
+# ---------------------------------------------------------------------------
+ABI_SHIM_SRC := tests/abi/consumer_shim.c
+ABI_SHIM_BIN := $(TEST_DIR)/abi/consumer_shim
+
+$(ABI_SHIM_BIN): $(ABI_SHIM_SRC) $(LIB_A) | $(TEST_DIR)/abi
+	$(CC) -std=c99 -Wall -Wextra -Wpedantic -Werror $(INC_FLAGS) $(PROFILE_DEF) $(CODEC_DEF) $(DET_DEF) -o $@ $< $(LIB_A)
+
+$(TEST_DIR)/abi:
+	@mkdir -p $@
+
+test-abi-shim: $(ABI_SHIM_BIN)
+	@echo "[asx] test-abi-shim: running consumer ABI/API stability shim..."
+	@$(ABI_SHIM_BIN)
+	@echo "[asx] test-abi-shim: PASS"
+
+# ---------------------------------------------------------------------------
+# abi-check — ABI break detection gate (bd-56t.4)
+# ---------------------------------------------------------------------------
+abi-check:
+	@echo "[asx] abi-check: verifying ABI stability..."
+	@tools/ci/check_abi_stability.sh --strict
+	@echo "[asx] abi-check: PASS"
+
+# ---------------------------------------------------------------------------
 # test-e2e — run all canonical e2e scenario lanes
 # ---------------------------------------------------------------------------
 test-e2e:
@@ -601,6 +634,36 @@ bench: bench-build
 
 bench-json: bench-build
 	@$(BENCH_BIN) --json
+
+.PHONY: slo-gate size-gate evidence-dashboard
+slo-gate: bench-build
+	@echo "[asx] slo-gate: capturing benchmark and evaluating SLO baselines..."
+	@mkdir -p build/perf
+	@$(BENCH_BIN) --json > build/perf/bench-results.json
+	@tools/ci/evaluate_slo_gates.sh \
+		--bench-json build/perf/bench-results.json \
+		--output build/perf/slo_gate_report.json \
+		--strict
+	@echo "[asx] slo-gate: complete (report: build/perf/slo_gate_report.json)"
+
+size-gate: release bench-build
+	@echo "[asx] size-gate: measuring binary size and cold-start metrics..."
+	@mkdir -p build/perf
+	@$(BENCH_BIN) --json > build/perf/bench-results.json
+	@tools/ci/evaluate_size_gates.sh \
+		--lib $(LIB_DIR)/libasx.a \
+		--bench-json build/perf/bench-results.json \
+		--output build/perf/size_gate_report.json \
+		--strict
+	@echo "[asx] size-gate: complete (report: build/perf/size_gate_report.json)"
+
+evidence-dashboard: bench-build
+	@echo "[asx] evidence-dashboard: collecting metrics and computing trends..."
+	@mkdir -p build/perf
+	@$(BENCH_BIN) --json > build/perf/bench-results.json
+	@tools/ci/run_evidence_dashboard.sh \
+		--bench-json build/perf/bench-results.json
+	@echo "[asx] evidence-dashboard: complete"
 
 # ---------------------------------------------------------------------------
 # conformance — Rust fixture parity verification
@@ -735,6 +798,28 @@ release:
 	$(MAKE) build BUILD_TYPE=release
 
 # ---------------------------------------------------------------------------
+# release-artifacts — deterministic tar.xz bundles + integrity metadata
+# ---------------------------------------------------------------------------
+release-artifacts:
+	@version="$(RELEASE_VERSION)"; \
+	if [ -z "$$version" ]; then \
+		echo "[asx] release-artifacts: RELEASE_VERSION must be set (example: make release-artifacts RELEASE_VERSION=0.1.0 RELEASE_TARGET=linux-x86_64)"; \
+		exit 1; \
+	fi; \
+	source_epoch="$(SOURCE_DATE_EPOCH)"; \
+	if [ -z "$$source_epoch" ]; then \
+		source_epoch="$$(git log -1 --format=%ct 2>/dev/null || date +%s)"; \
+	fi; \
+	tools/ci/run_release_artifacts.sh \
+		--version "$$version" \
+		--target "$(RELEASE_TARGET)" \
+		--kind "$(RELEASE_KIND)" \
+		--profile "$(PROFILE)" \
+		--codec "$(CODEC)" \
+		--deterministic "$(DETERMINISTIC)" \
+		--source-date-epoch "$$source_epoch"
+
+# ---------------------------------------------------------------------------
 # install / uninstall
 # ---------------------------------------------------------------------------
 install: release
@@ -824,7 +909,7 @@ qemu-smoke:
 # check — combined gate for PR/push CI
 # ---------------------------------------------------------------------------
 .PHONY: check check-ci
-check: format-check lint lint-docs lint-checkpoint lint-anti-butchering lint-evidence lint-semantic-delta lint-static-analysis build test model-check
+check: format-check lint lint-docs lint-checkpoint lint-anti-butchering lint-evidence lint-semantic-delta lint-static-analysis build test model-check abi-check test-abi-shim
 
 check-ci: CI=1
 check-ci: format-check lint lint-checkpoint lint-anti-butchering lint-evidence lint-semantic-delta lint-static-analysis build test model-check test-e2e-vertical conformance codec-equivalence profile-parity fuzz-smoke ci-embedded-matrix
@@ -867,6 +952,7 @@ help:
 	@echo "  bench              Performance benchmarks (JSON output)"
 	@echo "  bench-json         Benchmarks (JSON-only to stdout)"
 	@echo "  release            Optimized production build"
+	@echo "  release-artifacts  Build release tar.xz + checksum/signature/provenance bundles"
 	@echo "  install            Install to PREFIX (default /usr/local)"
 	@echo "  check              Combined gate (format+lint+build+test)"
 	@echo "  clean              Remove build artifacts"
@@ -879,3 +965,6 @@ help:
 	@echo "  TARGET=<triplet>   Cross-compilation target"
 	@echo "  BUILD_TYPE=debug|release"
 	@echo "  DETERMINISTIC=0|1  Deterministic scheduling mode"
+	@echo "  RELEASE_VERSION=x.y.z   Release version for release-artifacts target"
+	@echo "  RELEASE_TARGET=<id>     Artifact id (default: linux-x86_64)"
+	@echo "  RELEASE_KIND=binary|source"

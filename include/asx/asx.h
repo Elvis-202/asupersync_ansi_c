@@ -21,6 +21,9 @@
 /* Symbol visibility (provides ASX_API) */
 #include <asx/asx_export.h>
 
+/* ABI stability contract and versioning */
+#include <asx/asx_abi.h>
+
 /* Configuration and profile selection */
 #include <asx/asx_config.h>
 

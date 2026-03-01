@@ -54,6 +54,35 @@ jobs:
             exit 1
           fi
 
+      - name: Evaluate SLO gates
+        id: slo_gate
+        run: |
+          mkdir -p build/perf
+          tools/ci/evaluate_slo_gates.sh \
+            --bench-json bench-results.json \
+            --output build/perf/slo_gate_report.json \
+            --run-id "${{ env.ASX_CI_RUN_TAG }}" \
+            --strict
+
+      - name: Evaluate size and cold-start gates
+        id: size_gate
+        run: |
+          mkdir -p build/perf
+          tools/ci/evaluate_size_gates.sh \
+            --lib build/lib/libasx.a \
+            --bench-json bench-results.json \
+            --output build/perf/size_gate_report.json \
+            --run-id "${{ env.ASX_CI_RUN_TAG }}" \
+            --strict
+
+      - name: Run evidence dashboard
+        id: evidence_dashboard
+        if: always() && steps.run_bench_json.outcome == 'success'
+        run: |
+          tools/ci/run_evidence_dashboard.sh \
+            --bench-json bench-results.json \
+            --run-id "${{ env.ASX_CI_RUN_TAG }}"
+
       - name: Emit perf lane manifest
         if: always()
         run: |
@@ -74,6 +103,12 @@ jobs:
           elif [ "${{ steps.validate_manifest.outcome }}" = "failure" ]; then
             first_failure="validate-bench-artifacts"
             rerun="ls -l bench-results.json"
+          elif [ "${{ steps.slo_gate.outcome }}" = "failure" ]; then
+            first_failure="slo-gate"
+            rerun="tools/ci/evaluate_slo_gates.sh --bench-json bench-results.json --strict"
+          elif [ "${{ steps.size_gate.outcome }}" = "failure" ]; then
+            first_failure="size-gate"
+            rerun="tools/ci/evaluate_size_gates.sh --lib build/lib/libasx.a --bench-json bench-results.json --strict"
           fi
 
           status="pass"
@@ -92,6 +127,8 @@ jobs:
             --arg bench_outcome "${{ steps.run_bench.outcome }}" \
             --arg bench_json_outcome "${{ steps.run_bench_json.outcome }}" \
             --arg validate_outcome "${{ steps.validate_manifest.outcome }}" \
+            --arg slo_outcome "${{ steps.slo_gate.outcome }}" \
+            --arg size_outcome "${{ steps.size_gate.outcome }}" \
             --arg first_failure "$first_failure" \
             --arg rerun "$rerun" \
             '{
@@ -105,7 +142,9 @@ jobs:
                 {id: "release-build", outcome: $build_outcome, rerun: "make release"},
                 {id: "bench", outcome: $bench_outcome, rerun: "make bench"},
                 {id: "bench-json", outcome: $bench_json_outcome, rerun: "make bench-json > bench-results.json"},
-                {id: "validate-bench-artifacts", outcome: $validate_outcome, rerun: "ls -l bench-results.json"}
+                {id: "validate-bench-artifacts", outcome: $validate_outcome, rerun: "ls -l bench-results.json"},
+                {id: "slo-gate", outcome: $slo_outcome, rerun: "tools/ci/evaluate_slo_gates.sh --bench-json bench-results.json --strict"},
+                {id: "size-gate", outcome: $size_outcome, rerun: "tools/ci/evaluate_size_gates.sh --lib build/lib/libasx.a --bench-json bench-results.json --strict"}
               ],
               first_failure: (if $first_failure == "" then null else {step: $first_failure, rerun: $rerun} end)
             }' > "${ASX_CI_ARTIFACT_ROOT}/${lane}.manifest.json"
@@ -118,5 +157,7 @@ jobs:
           path: |
             bench-results.json
             build/bench/
+            build/perf/
+            tools/ci/artifacts/evidence/
             ${{ env.ASX_CI_ARTIFACT_ROOT }}/perf-tail-deadline.manifest.json
           retention-days: 30
