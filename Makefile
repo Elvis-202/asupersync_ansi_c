@@ -249,6 +249,7 @@ E2E_VERTICAL_SCRIPTS := \
 .PHONY: format-check lint lint-docs lint-checkpoint lint-anti-butchering lint-evidence lint-semantic-delta lint-static-analysis
 .PHONY: model-check
 .PHONY: test test-unit test-invariants test-vignettes test-e2e test-e2e-vertical test-abi-shim abi-check
+.PHONY: formal-cbmc formal-algebraic formal-tv formal-check
 .PHONY: conformance codec-equivalence profile-parity
 .PHONY: fuzz-smoke ci-embedded-matrix
 .PHONY: release release-artifacts bench
@@ -530,6 +531,80 @@ abi-check:
 	@echo "[asx] abi-check: verifying ABI stability..."
 	@tools/ci/check_abi_stability.sh --strict
 	@echo "[asx] abi-check: PASS"
+
+# ---------------------------------------------------------------------------
+# formal-cbmc — CBMC-compatible transition harness verification (bd-3vt.1)
+# ---------------------------------------------------------------------------
+FORMAL_CBMC_DIR := tests/formal/cbmc
+FORMAL_CBMC_SRCS := $(wildcard $(FORMAL_CBMC_DIR)/*_harness.c)
+FORMAL_CBMC_BINS := $(patsubst $(FORMAL_CBMC_DIR)/%.c,$(TEST_DIR)/formal/%,$(FORMAL_CBMC_SRCS))
+
+$(TEST_DIR)/formal:
+	@mkdir -p $@
+
+$(TEST_DIR)/formal/%: $(FORMAL_CBMC_DIR)/%.c src/core/transition_tables.c | $(TEST_DIR)/formal
+	$(CC) -std=c99 -Wall -Wextra -Wpedantic -Werror $(INC_FLAGS) $(PROFILE_DEF) $(CODEC_DEF) $(DET_DEF) -o $@ $< src/core/transition_tables.c
+
+formal-cbmc: $(FORMAL_CBMC_BINS)
+	@echo "[asx] formal-cbmc: running $(words $(FORMAL_CBMC_BINS)) CBMC-compatible harness(es)..."
+	@pass=0; fail=0; \
+	for bin in $(FORMAL_CBMC_BINS); do \
+		name=$$(basename $$bin); \
+		if $$bin 2>&1; then \
+			pass=$$((pass + 1)); \
+		else \
+			fail=$$((fail + 1)); \
+		fi; \
+	done; \
+	echo "[asx] formal-cbmc: $$pass passed, $$fail failed"; \
+	[ $$fail -eq 0 ] || exit 1
+	@echo "[asx] formal-cbmc: PASS"
+
+# ---------------------------------------------------------------------------
+# formal-algebraic — algebraic property verification (bd-3vt.1)
+# ---------------------------------------------------------------------------
+FORMAL_ALG_DIR := tests/formal/algebraic
+FORMAL_ALG_SRCS := $(wildcard $(FORMAL_ALG_DIR)/test_*.c)
+
+$(TEST_DIR)/formal/test_outcome_lattice: $(FORMAL_ALG_DIR)/test_outcome_lattice.c src/core/outcome.c | $(TEST_DIR)/formal
+	$(CC) -std=c99 -Wall -Wextra -Wpedantic -Werror $(INC_FLAGS) $(PROFILE_DEF) $(CODEC_DEF) $(DET_DEF) -o $@ $< src/core/outcome.c
+
+$(TEST_DIR)/formal/test_cancel_monotone: $(FORMAL_ALG_DIR)/test_cancel_monotone.c src/core/cancel.c src/core/budget.c | $(TEST_DIR)/formal
+	$(CC) -std=c99 -Wall -Wextra -Wpedantic -Werror $(INC_FLAGS) $(PROFILE_DEF) $(CODEC_DEF) $(DET_DEF) -o $@ $< src/core/cancel.c src/core/budget.c
+
+$(TEST_DIR)/formal/test_budget_lattice: $(FORMAL_ALG_DIR)/test_budget_lattice.c src/core/budget.c | $(TEST_DIR)/formal
+	$(CC) -std=c99 -Wall -Wextra -Wpedantic -Werror $(INC_FLAGS) $(PROFILE_DEF) $(CODEC_DEF) $(DET_DEF) -o $@ $< src/core/budget.c
+
+FORMAL_ALG_BINS := $(TEST_DIR)/formal/test_outcome_lattice $(TEST_DIR)/formal/test_cancel_monotone $(TEST_DIR)/formal/test_budget_lattice
+
+formal-algebraic: $(FORMAL_ALG_BINS)
+	@echo "[asx] formal-algebraic: running $(words $(FORMAL_ALG_BINS)) algebraic property suite(s)..."
+	@pass=0; fail=0; \
+	for bin in $(FORMAL_ALG_BINS); do \
+		name=$$(basename $$bin); \
+		if $$bin 2>&1; then \
+			pass=$$((pass + 1)); \
+		else \
+			fail=$$((fail + 1)); \
+		fi; \
+	done; \
+	echo "[asx] formal-algebraic: $$pass passed, $$fail failed"; \
+	[ $$fail -eq 0 ] || exit 1
+	@echo "[asx] formal-algebraic: PASS"
+
+# ---------------------------------------------------------------------------
+# formal-tv — translation validation (schema vs C code) (bd-3vt.1)
+# ---------------------------------------------------------------------------
+formal-tv:
+	@echo "[asx] formal-tv: validating C code against invariant schema..."
+	@tools/ci/check_translation_validation.sh --strict
+	@echo "[asx] formal-tv: PASS"
+
+# ---------------------------------------------------------------------------
+# formal-check — all formal verification gates (bd-3vt.1)
+# ---------------------------------------------------------------------------
+formal-check: formal-cbmc formal-algebraic formal-tv
+	@echo "[asx] formal-check: all formal verification gates PASS"
 
 # ---------------------------------------------------------------------------
 # test-e2e — run all canonical e2e scenario lanes
@@ -909,7 +984,7 @@ qemu-smoke:
 # check — combined gate for PR/push CI
 # ---------------------------------------------------------------------------
 .PHONY: check check-ci
-check: format-check lint lint-docs lint-checkpoint lint-anti-butchering lint-evidence lint-semantic-delta lint-static-analysis build test model-check abi-check test-abi-shim
+check: format-check lint lint-docs lint-checkpoint lint-anti-butchering lint-evidence lint-semantic-delta lint-static-analysis build test model-check abi-check test-abi-shim formal-check
 
 check-ci: CI=1
 check-ci: format-check lint lint-checkpoint lint-anti-butchering lint-evidence lint-semantic-delta lint-static-analysis build test model-check test-e2e-vertical conformance codec-equivalence profile-parity fuzz-smoke ci-embedded-matrix
