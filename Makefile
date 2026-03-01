@@ -249,7 +249,7 @@ E2E_VERTICAL_SCRIPTS := \
 .PHONY: format-check lint lint-docs lint-checkpoint lint-anti-butchering lint-evidence lint-semantic-delta lint-static-analysis
 .PHONY: model-check
 .PHONY: test test-unit test-invariants test-vignettes test-e2e test-e2e-vertical test-abi-shim abi-check
-.PHONY: formal-cbmc formal-algebraic formal-tv formal-check
+.PHONY: formal-cbmc formal-algebraic formal-tv formal-litmus formal-codegen formal-check
 .PHONY: conformance codec-equivalence profile-parity
 .PHONY: fuzz-smoke ci-embedded-matrix
 .PHONY: release release-artifacts bench
@@ -601,9 +601,31 @@ formal-tv:
 	@echo "[asx] formal-tv: PASS"
 
 # ---------------------------------------------------------------------------
-# formal-check — all formal verification gates (bd-3vt.1)
+# formal-litmus — memory-model litmus suite (bd-3vt.4)
 # ---------------------------------------------------------------------------
-formal-check: formal-cbmc formal-algebraic formal-tv
+FORMAL_LITMUS_SRC := tests/formal/litmus/test_memory_model_litmus.c
+FORMAL_LITMUS_BIN := $(TEST_DIR)/formal/test_memory_model_litmus
+
+$(FORMAL_LITMUS_BIN): $(FORMAL_LITMUS_SRC) src/core/transition_tables.c src/core/outcome.c src/core/cancel.c src/core/budget.c | $(TEST_DIR)/formal
+	$(CC) -std=c99 -Wall -Wextra -Wpedantic -Werror $(INC_FLAGS) $(PROFILE_DEF) $(CODEC_DEF) $(DET_DEF) -o $@ $< src/core/transition_tables.c src/core/outcome.c src/core/cancel.c src/core/budget.c
+
+formal-litmus: $(FORMAL_LITMUS_BIN)
+	@echo "[asx] formal-litmus: running memory-model litmus suite..."
+	@$(FORMAL_LITMUS_BIN)
+	@echo "[asx] formal-litmus: PASS"
+
+# ---------------------------------------------------------------------------
+# formal-codegen — cross-optimization codegen stability (bd-3vt.4)
+# ---------------------------------------------------------------------------
+formal-codegen:
+	@echo "[asx] formal-codegen: checking codegen stability across -O levels..."
+	@tools/ci/check_codegen_stability.sh --strict
+	@echo "[asx] formal-codegen: PASS"
+
+# ---------------------------------------------------------------------------
+# formal-check — all formal verification gates (bd-3vt.1, bd-3vt.4)
+# ---------------------------------------------------------------------------
+formal-check: formal-cbmc formal-algebraic formal-tv formal-litmus formal-codegen
 	@echo "[asx] formal-check: all formal verification gates PASS"
 
 # ---------------------------------------------------------------------------
