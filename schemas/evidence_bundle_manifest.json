@@ -1,0 +1,271 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "asx-evidence-bundle-manifest",
+  "description": "Machine-readable manifest for certification evidence bundle (bd-56t.3). Maps claims to evidence artifacts for automated completeness checking.",
+  "version": "1.0.0",
+
+  "bundle_version": "1.0.0",
+  "bead": "bd-56t.3",
+
+  "sections": {
+    "requirements": {
+      "label": "Requirements Traceability",
+      "artifacts": [
+        {
+          "id": "CL-REQ-01",
+          "claim": "All plan commitments mapped to implementation beads",
+          "path": "docs/PLAN_EXECUTION_TRACEABILITY_INDEX.md",
+          "gate": "LINT-EVIDENCE",
+          "required": true
+        },
+        {
+          "id": "CL-REQ-02",
+          "claim": "Feature parity with Rust reference tracked",
+          "path": "docs/FEATURE_PARITY.md",
+          "gate": "GATE-SEM-DELTA",
+          "required": true
+        },
+        {
+          "id": "CL-REQ-03",
+          "claim": "State machines formally specified",
+          "path": "schemas/invariant_schema.json",
+          "gate": "MODEL-CHECK",
+          "required": true
+        },
+        {
+          "id": "CL-REQ-04",
+          "claim": "Fixture schema defines acceptance format",
+          "path": "schemas/canonical_fixture.schema.json",
+          "gate": "CONFORMANCE",
+          "required": true
+        }
+      ]
+    },
+
+    "design": {
+      "label": "Design Assurance",
+      "artifacts": [
+        {
+          "id": "CL-DES-01",
+          "claim": "Rust safety guarantees have explicit C substitutions",
+          "path": "docs/GUARANTEE_SUBSTITUTION_MATRIX.md",
+          "gate": "LINT-ANTI-BUTCHERING",
+          "required": true
+        },
+        {
+          "id": "CL-DES-02",
+          "claim": "Architecture decisions recorded and justified",
+          "path": "docs/OPEN_DECISIONS_ADR.md",
+          "gate": null,
+          "required": true
+        },
+        {
+          "id": "CL-DES-03",
+          "claim": "Lifecycle transitions formally documented",
+          "path": "docs/LIFECYCLE_TRANSITION_TABLES.md",
+          "gate": "MODEL-CHECK",
+          "required": true
+        },
+        {
+          "id": "CL-DES-04",
+          "claim": "Formal verification covers critical paths",
+          "path": "docs/FORMAL_ASSURANCE_LADDER.md",
+          "gate": "formal-check",
+          "required": true
+        },
+        {
+          "id": "CL-DES-05",
+          "claim": "Memory model assumptions documented",
+          "path": "docs/MEMORY_MODEL_FINDINGS.md",
+          "gate": "formal-litmus",
+          "required": true
+        },
+        {
+          "id": "CL-DES-06",
+          "claim": "ABI stability contract defined",
+          "path": "include/asx/asx_abi.h",
+          "gate": "abi-check",
+          "required": true
+        }
+      ]
+    },
+
+    "verification": {
+      "label": "Verification Evidence",
+      "artifacts": [
+        {
+          "id": "CL-VER-01",
+          "claim": "Unit tests cover all modules",
+          "path": "build/test-logs/unit-*.jsonl",
+          "gate": "UNIT",
+          "required": true,
+          "ci_artifact": true
+        },
+        {
+          "id": "CL-VER-03",
+          "claim": "Conformance validates Rust parity",
+          "path": "tools/ci/artifacts/conformance/*-conformance.*",
+          "gate": "CONFORMANCE",
+          "required": true,
+          "ci_artifact": true
+        },
+        {
+          "id": "CL-VER-06",
+          "claim": "Differential fuzzing finds no divergence",
+          "path": "tools/ci/artifacts/fuzz/*.summary.json",
+          "gate": "GATE-FUZZ",
+          "required": true,
+          "ci_artifact": true
+        },
+        {
+          "id": "CL-VER-08",
+          "claim": "CBMC harnesses verify C code (145 checks)",
+          "path": "tests/formal/cbmc/*_harness.c",
+          "gate": "formal-cbmc",
+          "required": true
+        },
+        {
+          "id": "CL-VER-09",
+          "claim": "Algebraic properties hold (25 tests)",
+          "path": "tests/formal/algebraic/test_*.c",
+          "gate": "formal-algebraic",
+          "required": true
+        },
+        {
+          "id": "CL-VER-10",
+          "claim": "Translation validation: schema matches C (102 checks)",
+          "path": "tools/ci/check_translation_validation.sh",
+          "gate": "formal-tv",
+          "required": true
+        },
+        {
+          "id": "CL-VER-12",
+          "claim": "ABI frozen values unchanged (29 checks)",
+          "path": "tools/ci/check_abi_stability.sh",
+          "gate": "abi-check",
+          "required": true
+        },
+        {
+          "id": "CL-VER-14",
+          "claim": "SLO performance budgets met",
+          "path": "tools/ci/evaluate_slo_gates.sh",
+          "gate": "slo-gate",
+          "required": true
+        },
+        {
+          "id": "CL-VER-17",
+          "claim": "Semantic delta budget is zero",
+          "path": "build/conformance/semantic_delta_*.json",
+          "gate": "GATE-SEM-DELTA",
+          "required": true,
+          "ci_artifact": true
+        },
+        {
+          "id": "CL-VER-18",
+          "claim": "Memory-model litmus tests pass (15 tests)",
+          "path": "tests/formal/litmus/test_memory_model_litmus.c",
+          "gate": "formal-litmus",
+          "required": true
+        }
+      ]
+    },
+
+    "risk": {
+      "label": "Risk Mitigation",
+      "artifacts": [
+        {
+          "id": "CL-RSK-01",
+          "claim": "All risks have owners and mitigations",
+          "path": "docs/RISK_REGISTER.md",
+          "gate": null,
+          "required": true
+        },
+        {
+          "id": "CL-RSK-02",
+          "claim": "Anti-butchering prevents semantic regression",
+          "path": "build/conformance/anti_butcher_*.json",
+          "gate": "LINT-ANTI-BUTCHERING",
+          "required": true,
+          "ci_artifact": true
+        },
+        {
+          "id": "CL-RSK-03",
+          "claim": "Deferred surfaces explicitly tracked",
+          "path": "docs/DEFERRED_SURFACES.md",
+          "gate": null,
+          "required": true
+        }
+      ]
+    },
+
+    "deployment": {
+      "label": "Deployment Readiness",
+      "artifacts": [
+        {
+          "id": "CL-DEP-01",
+          "claim": "Operator runbooks for target verticals",
+          "path": "docs/DEPLOYMENT_HARDENING.md",
+          "gate": null,
+          "required": true
+        },
+        {
+          "id": "CL-DEP-02",
+          "claim": "Automotive safety profile documented",
+          "path": "docs/AUTOMOTIVE_PROFILE.md",
+          "gate": "GATE-AUTO-DEADLINE",
+          "required": true
+        },
+        {
+          "id": "CL-DEP-05",
+          "claim": "Evidence dashboard shows no regressions",
+          "path": "build/perf/regression_dashboard_*.json",
+          "gate": "evidence-dashboard",
+          "required": true,
+          "ci_artifact": true
+        }
+      ]
+    }
+  },
+
+  "standards_mappings": {
+    "iso_26262": {
+      "label": "ISO 26262 (Automotive Safety)",
+      "applicable_asil": ["B", "C", "D"],
+      "clause_mapping": {
+        "6.4.1": {"label": "Safety requirements specification", "claims": ["CL-REQ-01", "CL-REQ-02", "CL-REQ-03", "CL-REQ-04"]},
+        "6.4.2": {"label": "Software architectural design", "claims": ["CL-DES-01", "CL-DES-02", "CL-DES-03", "CL-DES-04", "CL-DES-05", "CL-DES-06"]},
+        "6.4.4": {"label": "Software unit testing", "claims": ["CL-VER-01", "CL-VER-08", "CL-VER-09"]},
+        "6.4.5": {"label": "Software integration testing", "claims": ["CL-VER-03", "CL-VER-06"]},
+        "6.4.7": {"label": "Verification of software safety", "claims": ["CL-RSK-01", "CL-RSK-02", "CL-RSK-03"]},
+        "6.4.8": {"label": "Software release", "claims": ["CL-DEP-01", "CL-DEP-02", "CL-DEP-05"]}
+      }
+    },
+    "do_178c": {
+      "label": "DO-178C (Avionics Software)",
+      "applicable_dal": ["A", "B", "C", "D"],
+      "objective_mapping": {
+        "A-3": {"label": "Software Requirements", "claims": ["CL-REQ-01", "CL-REQ-02", "CL-REQ-03"]},
+        "A-4": {"label": "Software Design", "claims": ["CL-DES-01", "CL-DES-03", "CL-DES-04"]},
+        "A-7": {"label": "Verification Process", "claims": ["CL-VER-01", "CL-VER-03", "CL-VER-08", "CL-VER-10", "CL-VER-12"]}
+      }
+    },
+    "iec_61508": {
+      "label": "IEC 61508 (Industrial Safety)",
+      "applicable_sil": [1, 2, 3, 4],
+      "clause_mapping": {
+        "7.4.2": {"label": "Software safety requirements", "claims": ["CL-REQ-01", "CL-REQ-02"]},
+        "7.4.3": {"label": "Software design and development", "claims": ["CL-DES-01", "CL-DES-03", "CL-DES-04"]},
+        "7.4.4": {"label": "Software verification", "claims": ["CL-VER-01", "CL-VER-03", "CL-VER-08", "CL-VER-10"]},
+        "7.4.6": {"label": "Modification procedures", "claims": ["CL-RSK-02", "CL-RSK-03"]}
+      }
+    }
+  },
+
+  "completeness_rules": [
+    {"rule": "All required artifacts must exist at bundle assembly time", "enforcement": "make check-evidence-bundle"},
+    {"rule": "No claim may reference a non-existent artifact path", "enforcement": "Glob check at assembly"},
+    {"rule": "All CI artifacts must have a run_id traceable to git SHA", "enforcement": "Manifest run_id field"},
+    {"rule": "Semantic delta budget must be zero unless exception approved", "enforcement": "GATE-SEM-DELTA"},
+    {"rule": "All mandatory gates must pass in latest CI manifest", "enforcement": "check-ci"}
+  ]
+}

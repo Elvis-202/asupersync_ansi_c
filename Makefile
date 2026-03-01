@@ -250,6 +250,7 @@ E2E_VERTICAL_SCRIPTS := \
 .PHONY: model-check
 .PHONY: test test-unit test-invariants test-vignettes test-e2e test-e2e-vertical test-abi-shim abi-check
 .PHONY: formal-cbmc formal-algebraic formal-tv formal-litmus formal-codegen formal-check
+.PHONY: check-evidence-bundle
 .PHONY: conformance codec-equivalence profile-parity
 .PHONY: fuzz-smoke ci-embedded-matrix
 .PHONY: release release-artifacts bench
@@ -761,6 +762,14 @@ evidence-dashboard: bench-build
 	@tools/ci/run_evidence_dashboard.sh \
 		--bench-json build/perf/bench-results.json
 	@echo "[asx] evidence-dashboard: complete"
+
+# ---------------------------------------------------------------------------
+# check-evidence-bundle — certification evidence completeness
+# ---------------------------------------------------------------------------
+check-evidence-bundle:
+	@echo "[asx] check-evidence-bundle: validating evidence completeness..."
+	@tools/ci/check_evidence_bundle.sh --strict
+	@echo "[asx] check-evidence-bundle: complete"
 
 # ---------------------------------------------------------------------------
 # conformance — Rust fixture parity verification
