@@ -144,7 +144,8 @@ RUNTIME_SRC := \
 	src/runtime/overload_catalog.c \
 	src/runtime/parallel.c \
 	src/runtime/adapter.c \
-	src/runtime/vertical_adapter.c
+	src/runtime/vertical_adapter.c \
+	src/runtime/virtual_time.c
 
 CHANNEL_SRC := \
 	src/channel/mpsc.c
