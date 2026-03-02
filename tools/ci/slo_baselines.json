@@ -11,7 +11,7 @@
         "author": "FoggyForge",
         "action": "initial_capture",
         "rationale": "First SLO baseline from CORE profile bench run on development host. p99 budgets use 5x headroom; p99.9/p99.99 use 10-50x headroom due to extreme tail volatility on shared/CI hosts. Fast operations (timer_cancel, channel_recv) get extra headroom since OS noise dominates their baseline.",
-        "commit": "pending"
+        "commit": "07b193833509ff496ed1e02201baa06dab1e53be"
       }
     ]
   },

@@ -11,7 +11,7 @@
         "author": "FoggyForge",
         "action": "initial_capture",
         "rationale": "First size/cold-start baseline from CORE profile release build on development host (x86_64, GCC). Archive size budget set to 2x baseline to allow feature growth. Text budget set to 1.5x for tighter code-size control. Cold-start budgets use 10x headroom for CI runner variance.",
-        "commit": "pending"
+        "commit": "07b193833509ff496ed1e02201baa06dab1e53be"
       }
     ]
   },

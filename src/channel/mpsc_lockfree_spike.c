@@ -138,6 +138,7 @@ void asx_lockfree_queue_init(asx_lockfree_queue *q, uint32_t capacity)
     q->alive = 1;
 
     for (i = 0; i < actual_cap; i++) {
+        ASX_CHECKPOINT_WAIVER("bounded: actual_cap <= ASX_LOCKFREE_MAX_CAPACITY");
         asx_atomic_store(&q->cells[i].sequence, i);
         q->cells[i].value = 0;
     }

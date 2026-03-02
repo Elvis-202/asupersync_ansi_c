@@ -151,8 +151,11 @@ extern "C" {
  *   if (asx_abi_version_major() != ASX_ABI_VERSION_MAJOR) { abort(); }
  * ----------------------------------------------------------------------- */
 
+/* Return the major component of the runtime ABI version. */
 ASX_API unsigned int asx_abi_version_major(void);
+/* Return the minor component of the runtime ABI version. */
 ASX_API unsigned int asx_abi_version_minor(void);
+/* Return the patch component of the runtime ABI version. */
 ASX_API unsigned int asx_abi_version_patch(void);
 
 #ifdef __cplusplus

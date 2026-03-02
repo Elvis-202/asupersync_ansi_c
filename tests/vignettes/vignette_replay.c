@@ -234,17 +234,62 @@ static int scenario_binary_roundtrip(void)
  * ------------------------------------------------------------------- */
 static int scenario_snapshot(void)
 {
+    uint64_t digest;
+    asx_snapshot_buffer snap1, snap2;
+    uint64_t snap_digest1, snap_digest2;
+
     printf("--- scenario: snapshot capture ---\n");
 
     /*
-     * Snapshot APIs are currently unstable on this runtime branch.
-     * Keep the vignette as a documented placeholder so the ergonomics
-     * surface remains visible without introducing nondeterministic crashes
-     * into the CI gate.
+     * ERGO: asx_snapshot_capture(&buf) fills a buffer with the current
+     * runtime state (JSON object with regions, tasks, obligations).
+     * asx_snapshot_digest(&buf) returns a FNV-1a hash of that buffer.
+     * Both are deterministic for the same runtime state.
      */
-    printf("  NOTE: snapshot flow skipped in ergonomics gate "
-           "(runtime stabilization pending)\n");
-    printf("  PASS: snapshot API surface documented\n");
+    if (run_scenario(&digest) != 0) {
+        printf("  FAIL: scenario run failed\n");
+        return 1;
+    }
+
+    if (asx_snapshot_capture(&snap1) != ASX_OK) {
+        printf("  FAIL: snapshot_capture failed\n");
+        return 1;
+    }
+
+    if (snap1.len == 0) {
+        printf("  FAIL: snapshot should not be empty\n");
+        return 1;
+    }
+    printf("  snapshot captured: %u bytes\n", snap1.len);
+
+    snap_digest1 = asx_snapshot_digest(&snap1);
+    if (snap_digest1 == 0) {
+        printf("  FAIL: snapshot digest should not be zero\n");
+        return 1;
+    }
+    printf("  snapshot digest: 0x%016llx\n", (unsigned long long)snap_digest1);
+
+    /*
+     * ERGO: Replaying the same deterministic scenario should produce
+     * the same snapshot digest. This confirms snapshot determinism
+     * in addition to trace determinism (scenario 1).
+     */
+    if (run_scenario(&digest) != 0) {
+        printf("  FAIL: second scenario run failed\n");
+        return 1;
+    }
+
+    if (asx_snapshot_capture(&snap2) != ASX_OK) {
+        printf("  FAIL: second snapshot_capture failed\n");
+        return 1;
+    }
+
+    snap_digest2 = asx_snapshot_digest(&snap2);
+    if (snap_digest1 != snap_digest2) {
+        printf("  FAIL: snapshot digest mismatch across identical runs\n");
+        return 1;
+    }
+    printf("  PASS: snapshot capture and digest determinism\n");
     return 0;
 }
 

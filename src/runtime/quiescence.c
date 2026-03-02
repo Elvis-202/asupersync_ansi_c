@@ -22,6 +22,7 @@ static asx_status asx_region_obligations_resolved(asx_region_id id)
     uint32_t i;
 
     for (i = 0; i < g_obligation_count; i++) {
+        ASX_CHECKPOINT_WAIVER("bounded: g_obligation_count <= MAX_OBLIGATIONS");
         if (!g_obligations[i].alive) continue;
         if (g_obligations[i].region != id) continue;
         if (g_obligations[i].state == ASX_OBLIGATION_RESERVED) {
@@ -37,6 +38,7 @@ static int asx_region_has_uncancelled_tasks(asx_region_id id)
     uint32_t i;
 
     for (i = 0; i < g_task_count; i++) {
+        ASX_CHECKPOINT_WAIVER("bounded: g_task_count <= MAX_TASKS");
         asx_task_slot *t = &g_tasks[i];
         if (!t->alive) continue;
         if (t->region != id) continue;

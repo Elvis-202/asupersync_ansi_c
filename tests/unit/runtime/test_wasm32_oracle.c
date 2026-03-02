@@ -156,7 +156,7 @@ TEST(budget_meet_digest_is_stable)
 
     h = fnv1a_u32(h, (uint32_t)m.deadline);
     h = fnv1a_u32(h, m.poll_quota);
-    h = fnv1a_u32(h, m.cost_quota);
+    h = fnv1a_u32(h, (uint32_t)m.cost_quota);
     h = fnv1a_u32(h, m.priority);
 
     /* Identity: meet with infinite */
@@ -166,7 +166,7 @@ TEST(budget_meet_digest_is_stable)
 
     h = fnv1a_u32(h, (uint32_t)m.deadline);
     h = fnv1a_u32(h, m.poll_quota);
-    h = fnv1a_u32(h, m.cost_quota);
+    h = fnv1a_u32(h, (uint32_t)m.cost_quota);
     h = fnv1a_u32(h, m.priority);
 
     ASSERT_TRUE(h != 0);

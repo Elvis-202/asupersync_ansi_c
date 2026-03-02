@@ -95,7 +95,7 @@ Nine mandatory gates from plan section 10.6, plus release artifact integrity and
 | **Pass criteria** | HFT benchmark produces valid metrics. Microburst and market-open-burst e2e pass. Overflow behavior under burst remains deterministic. p99 histogram bin coverage validated by test_hft_instrument (34 tests). |
 | **Rerun** | `make bench-json` (perf), `ASX_E2E_SEED=42 ASX_E2E_PROFILE=HFT tests/e2e/market_open_burst.sh` (e2e) |
 | **Failure action** | Profile-specific p99/jitter regressions require investigation. Check histogram bin distribution via test_hft_instrument. |
-| **Note** | Numeric threshold enforcement (SLO-based blocking) is planned but not yet wired — currently validates deterministic behavior and metric production. |
+| **Note** | SLO-based blocking is active via `evaluate_slo_gates.sh --strict` in `perf.yml`. Per-profile budgets defined in `tools/ci/slo_baselines.json`. |
 
 ### 1.7 Deadline/Watchdog Gate (Automotive)
 

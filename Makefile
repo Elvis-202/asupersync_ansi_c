@@ -249,7 +249,7 @@ E2E_VERTICAL_SCRIPTS := \
 # ===================================================================
 
 .PHONY: all build clean install uninstall
-.PHONY: format-check lint lint-docs lint-checkpoint lint-anti-butchering lint-evidence lint-semantic-delta lint-static-analysis
+.PHONY: format-check lint lint-docs lint-checkpoint lint-anti-butchering lint-evidence lint-semantic-delta lint-static-analysis lint-schema-validation
 .PHONY: model-check
 .PHONY: test test-unit test-invariants test-vignettes test-e2e test-e2e-vertical test-abi-shim abi-check
 .PHONY: formal-cbmc formal-algebraic formal-tv formal-litmus formal-codegen formal-check
@@ -381,6 +381,13 @@ lint-semantic-delta:
 	@./tools/ci/check_semantic_delta_budget.sh
 
 # ---------------------------------------------------------------------------
+# lint-schema-validation — JSON schema validation gate (bd-16r)
+# ---------------------------------------------------------------------------
+lint-schema-validation:
+	@echo "[asx] lint-schema-validation: validating fixture schemas..."
+	@./tools/ci/validate_schemas.sh
+
+# ---------------------------------------------------------------------------
 # model-check — bounded model-check for state machine properties (bd-66l.10)
 # ---------------------------------------------------------------------------
 MODEL_CHECK_SRC := tests/invariant/model_check/test_bounded_model.c
@@ -454,6 +461,15 @@ $(TEST_DIR)/unit/runtime/test_vertical_adapter: tests/unit/runtime/test_vertical
 
 $(TEST_DIR)/unit/runtime/test_codec_equivalence: tests/unit/runtime/test_codec_equivalence.c $(LIB_A) | test-dirs
 	$(CC) $(TEST_CFLAGS) -o $@ $< $(LIB_A) $(ALL_LDFLAGS)
+
+$(TEST_DIR)/unit/runtime/test_arena_locality: tests/unit/runtime/test_arena_locality.c src/runtime/arena_locality_spike.c $(LIB_A) | test-dirs
+	$(CC) $(TEST_CFLAGS) -o $@ $< src/runtime/arena_locality_spike.c $(LIB_A) $(ALL_LDFLAGS)
+
+$(TEST_DIR)/unit/runtime/test_barrier_cert: tests/unit/runtime/test_barrier_cert.c src/runtime/barrier_cert_spike.c $(LIB_A) | test-dirs
+	$(CC) $(TEST_CFLAGS) -o $@ $< src/runtime/barrier_cert_spike.c $(LIB_A) $(ALL_LDFLAGS)
+
+$(TEST_DIR)/unit/runtime/test_seqlock_ebr: tests/unit/runtime/test_seqlock_ebr.c src/runtime/seqlock_ebr_spike.c $(LIB_A) | test-dirs
+	$(CC) $(TEST_CFLAGS) -o $@ $< src/runtime/seqlock_ebr_spike.c $(LIB_A) $(ALL_LDFLAGS)
 
 # Link individual unit tests
 $(TEST_DIR)/unit/%: tests/unit/%.c $(LIB_A) | test-dirs
@@ -1018,10 +1034,10 @@ qemu-smoke:
 # check — combined gate for PR/push CI
 # ---------------------------------------------------------------------------
 .PHONY: check check-ci
-check: format-check lint lint-docs lint-checkpoint lint-anti-butchering lint-evidence lint-semantic-delta lint-static-analysis build test model-check abi-check test-abi-shim formal-check
+check: format-check lint lint-docs lint-checkpoint lint-anti-butchering lint-evidence lint-semantic-delta lint-static-analysis lint-schema-validation build test model-check abi-check test-abi-shim formal-check
 
 check-ci: CI=1
-check-ci: format-check lint lint-checkpoint lint-anti-butchering lint-evidence lint-semantic-delta lint-static-analysis build test model-check test-e2e-vertical conformance codec-equivalence profile-parity fuzz-smoke ci-embedded-matrix
+check-ci: format-check lint lint-checkpoint lint-anti-butchering lint-evidence lint-semantic-delta lint-static-analysis lint-schema-validation build test model-check test-e2e-vertical conformance codec-equivalence profile-parity fuzz-smoke ci-embedded-matrix
 
 # ---------------------------------------------------------------------------
 # clean
@@ -1043,6 +1059,7 @@ help:
 	@echo "  lint-docs          Public API documentation coverage gate"
 	@echo "  lint-checkpoint    Checkpoint coverage gate for kernel loops"
 	@echo "  lint-anti-butchering Anti-butchering proof-block gate"
+	@echo "  lint-schema-validation JSON schema validation gate"
 	@echo "  lint-evidence        Per-bead evidence linkage gate"
 	@echo "  lint-semantic-delta  Semantic delta budget gate"
 	@echo "  test               Run all tests (unit + invariant + vignettes)"

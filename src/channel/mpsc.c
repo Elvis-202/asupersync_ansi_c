@@ -97,6 +97,7 @@ static int channel_token_find(const asx_channel_slot *s,
     if (token == 0u) return 0;
 
     for (i = 0; i < ASX_CHANNEL_MAX_CAPACITY; i++) {
+        ASX_CHECKPOINT_WAIVER("bounded: ASX_CHANNEL_MAX_CAPACITY constant");
         if (s->permit_tokens[i] == token) {
             if (out_idx != NULL) {
                 *out_idx = i;
@@ -117,6 +118,7 @@ static uint32_t channel_token_allocate(asx_channel_slot *s)
     if (token == 0u) token = 1u;
 
     while (channel_token_find(s, token, NULL)) {
+        ASX_CHECKPOINT_WAIVER("bounded: at most ASX_CHANNEL_MAX_CAPACITY tokens active");
         token++;
         if (token == 0u) token = 1u;
     }
@@ -347,6 +349,7 @@ asx_status asx_channel_try_reserve(asx_channel_id id,
         uint32_t token = channel_token_allocate(s);
         int found = 0;
         for (permit_idx = 0; permit_idx < ASX_CHANNEL_MAX_CAPACITY; permit_idx++) {
+            ASX_CHECKPOINT_WAIVER("bounded: ASX_CHANNEL_MAX_CAPACITY constant");
             if (s->permit_tokens[permit_idx] == 0u) {
                 s->permit_tokens[permit_idx] = token;
                 found = 1;

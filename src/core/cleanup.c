@@ -96,6 +96,7 @@ asx_status asx_cleanup_pop(asx_cleanup_stack *stack,
 
     /* Keep depth tight for normal LIFO pop sequences. */
     while (stack->count > 0u && stack->fns[stack->count - 1u] == NULL) {
+        ASX_CHECKPOINT_WAIVER("bounded: stack->count decrements to zero");
         stack->count--;
     }
 

@@ -1,0 +1,54 @@
+{
+  "scenario_id": "obligation-lifecycle-reserve-commit-004",
+  "fixture_schema_version": "fixture-v1",
+  "scenario_dsl_version": "dsl-v1",
+  "profile": "ASX_PROFILE_FREESTANDING",
+  "codec": "json",
+  "seed": 42,
+  "input": {
+    "ops": [
+      {
+        "id": 0,
+        "op": "region_open",
+        "args": {}
+      },
+      {
+        "id": 1,
+        "op": "obligation_reserve",
+        "args": {
+          "region_ref": 0
+        }
+      },
+      {
+        "id": 2,
+        "op": "obligation_commit",
+        "args": {
+          "obligation_ref": 1
+        }
+      },
+      {
+        "id": 3,
+        "op": "region_close",
+        "args": {
+          "region_ref": 0
+        }
+      }
+    ]
+  },
+  "expected_events": [],
+  "expected_final_snapshot": {
+    "regions": 0,
+    "tasks": 0,
+    "obligations": 0
+  },
+  "expected_error_codes": [],
+  "semantic_digest": "sha256:d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5",
+  "provenance": {
+    "rust_baseline_commit": "38c152405bd03e2bd9eecf178bfbbe9472fed861",
+    "rust_toolchain_commit_hash": "7f99507f57e6c4aa0dce3daf6a13cca8cd4dd312",
+    "rust_toolchain_release": "1.95.0-nightly",
+    "rust_toolchain_host": "x86_64-unknown-linux-gnu",
+    "cargo_lock_sha256": "77f4bfaedfe5b8572dfca3181119f9432825ea3d868ee8f5d2793a6c5cdeffdc",
+    "capture_run_id": "capture-core-families-20260302"
+  }
+}

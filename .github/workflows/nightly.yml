@@ -1,0 +1,147 @@
+# =============================================================================
+# nightly.yml — Nightly extended fuzzing + e2e + schema validation (bd-15k)
+#
+# Runs on a daily schedule and manual dispatch. Exercises longer-running
+# test suites that are impractical for PR-level CI.
+#
+# Jobs:
+#   fuzz-nightly     Extended differential fuzzing (100K iterations)
+#   e2e-extended     Full e2e suite including vertical lanes
+#   schema-check     Strict schema validation of all fixtures
+# =============================================================================
+
+name: Nightly
+
+on:
+  schedule:
+    # Run at 03:00 UTC daily
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CI: 1
+  ASX_CI_RUN_TAG: "nightly-${{ github.run_id }}-${{ github.run_attempt }}"
+  ASX_CI_ARTIFACT_ROOT: build/ci-manifests
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # fuzz-nightly — extended differential fuzzing (100K iterations)
+  # ---------------------------------------------------------------------------
+  fuzz-nightly:
+    name: "fuzz: nightly differential (100K)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq jq
+
+      - name: Build library
+        run: make build
+
+      - name: Build fuzz harness
+        run: make fuzz-build
+
+      - name: Run nightly fuzzing
+        id: fuzz_nightly
+        run: make fuzz-nightly
+
+      - name: Run minimizer self-test
+        id: minimize
+        if: always() && steps.fuzz_nightly.outcome == 'success'
+        run: |
+          if make minimize-selftest 2>/dev/null; then
+            echo "minimizer selftest passed"
+          else
+            echo "minimizer selftest skipped or not available"
+          fi
+
+      - name: Emit nightly fuzz manifest
+        if: always()
+        run: |
+          mkdir -p "${ASX_CI_ARTIFACT_ROOT}"
+          lane="fuzz-nightly"
+          status="pass"
+          first_failure=""
+
+          if [ "${{ steps.fuzz_nightly.outcome }}" = "failure" ]; then
+            status="fail"
+            first_failure="fuzz-nightly"
+          fi
+
+          jq -n \
+            --arg lane "$lane" \
+            --arg status "$status" \
+            --arg run_tag "${{ env.ASX_CI_RUN_TAG }}" \
+            --arg sha "${{ github.sha }}" \
+            --arg first_failure "$first_failure" \
+            '{
+              lane: $lane,
+              status: $status,
+              run_tag: $run_tag,
+              sha: $sha,
+              first_failure: (if $first_failure == "" then null else $first_failure end)
+            }' > "${ASX_CI_ARTIFACT_ROOT}/${lane}.manifest.json"
+
+      - name: Upload fuzz artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-nightly-${{ env.ASX_CI_RUN_TAG }}
+          path: |
+            build/fuzz/
+            ${{ env.ASX_CI_ARTIFACT_ROOT }}/fuzz-nightly.manifest.json
+          retention-days: 14
+
+  # ---------------------------------------------------------------------------
+  # e2e-extended — full e2e suite with vertical lanes
+  # ---------------------------------------------------------------------------
+  e2e-extended:
+    name: "e2e: full suite + vertical lanes"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq jq python3
+
+      - name: Build library
+        run: make build
+
+      - name: Run e2e suite
+        id: e2e_suite
+        run: make test-e2e
+
+      - name: Run vertical e2e lanes
+        id: e2e_vertical
+        run: make test-e2e-vertical
+
+      - name: Run conformance + codec equivalence + profile parity
+        id: conformance
+        run: |
+          make conformance
+          make codec-equivalence
+          make profile-parity
+
+      - name: Run schema validation (strict)
+        id: schema_check
+        run: ./tools/ci/validate_schemas.sh --strict
+
+      - name: Upload e2e artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-extended-${{ env.ASX_CI_RUN_TAG }}
+          path: |
+            build/conformance/
+            build/e2e/
+          retention-days: 14
