@@ -12,6 +12,13 @@
         "action": "initial_capture",
         "rationale": "First SLO baseline from CORE profile bench run on development host. p99 budgets use 5x headroom; p99.9/p99.99 use 10-50x headroom due to extreme tail volatility on shared/CI hosts. Fast operations (timer_cancel, channel_recv) get extra headroom since OS noise dominates their baseline.",
         "commit": "07b193833509ff496ed1e02201baa06dab1e53be"
+      },
+      {
+        "date": "2026-03-02",
+        "author": "SandyAnchor",
+        "action": "add_hft_profile",
+        "rationale": "HFT profile baselines from development host. Captures HFT-specific instrumentation overhead. Same headroom strategy as CORE. Closes quality gate gap bd-39o.",
+        "commit": "pending"
       }
     ]
   },
@@ -73,6 +80,69 @@
       "deadline_report": {
         "miss_rate":         {"budget": 0.01,   "headroom": 20.0, "baseline": 0.0005},
         "max_overshoot_ns":  {"budget": 50000,  "headroom": 11.6, "baseline": 4297}
+      },
+      "adaptive_report": {
+        "fallback_rate":              {"budget": 0.80,  "headroom": 1.6,  "baseline": 0.50,  "direction": "upper"},
+        "mean_confidence_fp32_floor": {"budget": 1000000000, "headroom": 2.6, "baseline": 2641404886, "direction": "lower"}
+      }
+    },
+    "HFT": {
+      "captured_at": "2026-03-02T06:20:00Z",
+      "captured_on": "development-host",
+      "deterministic": true,
+      "benchmarks": {
+        "scheduler_single_task": {
+          "p99_ns":    {"budget": 1100,  "headroom": 5.0, "baseline": 221},
+          "p99_9_ns":  {"budget": 3500,  "headroom": 10.0, "baseline": 350},
+          "p99_99_ns": {"budget": 15000, "headroom": 5.3, "baseline": 2845},
+          "jitter_ns": {"budget": 200,   "headroom": 8.3, "baseline": 24}
+        },
+        "scheduler_multi_task": {
+          "p99_ns":    {"budget": 25000, "headroom": 5.0, "baseline": 4999},
+          "p99_9_ns":  {"budget": 135000, "headroom": 5.0, "baseline": 26970},
+          "p99_99_ns": {"budget": 135000, "headroom": 5.0, "baseline": 26970},
+          "jitter_ns": {"budget": 2500,  "headroom": 5.2, "baseline": 480}
+        },
+        "scheduler_multi_round": {
+          "p99_ns":    {"budget": 26500, "headroom": 5.0, "baseline": 5290},
+          "p99_9_ns":  {"budget": 120000, "headroom": 5.1, "baseline": 23364},
+          "p99_99_ns": {"budget": 120000, "headroom": 5.1, "baseline": 23364},
+          "jitter_ns": {"budget": 3000,  "headroom": 5.1, "baseline": 583}
+        },
+        "timer_register": {
+          "p99_ns":    {"budget": 85000,  "headroom": 5.3, "baseline": 16170},
+          "p99_9_ns":  {"budget": 150000, "headroom": 5.0, "baseline": 30517},
+          "jitter_ns": {"budget": 5500,   "headroom": 5.2, "baseline": 1064}
+        },
+        "timer_cancel": {
+          "p99_ns":    {"budget": 4500,  "headroom": 5.4, "baseline": 832},
+          "p99_9_ns":  {"budget": 10000, "headroom": 10.3, "baseline": 972},
+          "jitter_ns": {"budget": 300,   "headroom": 10.7, "baseline": 28}
+        },
+        "channel_send": {
+          "p99_ns":    {"budget": 50000,  "headroom": 5.3, "baseline": 9478},
+          "p99_9_ns":  {"budget": 125000, "headroom": 5.2, "baseline": 24145},
+          "jitter_ns": {"budget": 3500,   "headroom": 5.4, "baseline": 652}
+        },
+        "channel_recv": {
+          "p99_ns":    {"budget": 7000,  "headroom": 5.2, "baseline": 1343},
+          "p99_9_ns":  {"budget": 75000, "headroom": 5.3, "baseline": 14076},
+          "jitter_ns": {"budget": 700,   "headroom": 5.4, "baseline": 129}
+        },
+        "quiescence_drain": {
+          "p99_ns":    {"budget": 5500,  "headroom": 5.0, "baseline": 1102},
+          "p99_9_ns":  {"budget": 65000, "headroom": 5.2, "baseline": 12543},
+          "jitter_ns": {"budget": 300,   "headroom": 5.1, "baseline": 59}
+        },
+        "embedded_pressure": {
+          "p99_ns":    {"budget": 10000, "headroom": 5.2, "baseline": 1903},
+          "p99_9_ns":  {"budget": 10500, "headroom": 5.2, "baseline": 2034},
+          "jitter_ns": {"budget": 300,   "headroom": 5.7, "baseline": 53}
+        }
+      },
+      "deadline_report": {
+        "miss_rate":         {"budget": 0.01,  "headroom": 20.0, "baseline": 0.0},
+        "max_overshoot_ns":  {"budget": 50000, "headroom": 50.0, "baseline": 0}
       },
       "adaptive_report": {
         "fallback_rate":              {"budget": 0.80,  "headroom": 1.6,  "baseline": 0.50,  "direction": "upper"},

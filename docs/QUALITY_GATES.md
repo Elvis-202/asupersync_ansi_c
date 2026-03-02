@@ -242,10 +242,10 @@ Per `docs/WAVE_GATING_PROTOCOL.md`:
 
 | Gap | Status | Tracking |
 |-----|--------|----------|
-| HFT p99/jitter numeric SLO enforcement in perf.yml | Planned | Metrics produced but threshold comparison not yet blocking |
+| HFT p99/jitter numeric SLO enforcement in perf.yml | Done | HFT baselines in `slo_baselines.json`, `--strict` gate in `perf.yml` (bd-39o) |
 | MSVC build integration | Stub only | `build-msvc` prints SKIP; requires `cl.exe` on PATH |
 | Real-device smoke run for embedded | Manual | One device smoke required before milestone closure per plan |
-| Machine-readable traceability export | Planned | `traceability_index.json` referenced in PLAN_EXECUTION_TRACEABILITY_INDEX.md section 6 |
+| Machine-readable traceability export | Done | `make traceability-export` generates `build/traceability/traceability_index.json` (bd-3gn) |
 
 ## 8. Cross-References
 

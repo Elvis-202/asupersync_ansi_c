@@ -752,7 +752,7 @@ bench: bench-build
 bench-json: bench-build
 	@$(BENCH_BIN) --json
 
-.PHONY: slo-gate size-gate evidence-dashboard
+.PHONY: slo-gate size-gate evidence-dashboard traceability-export
 slo-gate: bench-build
 	@echo "[asx] slo-gate: capturing benchmark and evaluating SLO baselines..."
 	@mkdir -p build/perf
@@ -781,6 +781,11 @@ evidence-dashboard: bench-build
 	@tools/ci/run_evidence_dashboard.sh \
 		--bench-json build/perf/bench-results.json
 	@echo "[asx] evidence-dashboard: complete"
+
+traceability-export:
+	@echo "[asx] traceability-export: generating machine-readable traceability index..."
+	@tools/ci/generate_traceability_index.sh
+	@echo "[asx] traceability-export: complete"
 
 # ---------------------------------------------------------------------------
 # check-evidence-bundle — certification evidence completeness

@@ -77,6 +77,6 @@ When work lands:
 3. add or adjust verification surface linkage,
 4. ensure corresponding `FEATURE_PARITY.md` rows remain aligned.
 
-## 6. Planned Extensions
+## 6. Machine-Readable Export
 
-Future iterations may add machine-readable export (`traceability_index.json`) with stable IDs so CI can validate link completeness automatically.
+Run `make traceability-export` (or `tools/ci/generate_traceability_index.sh`) to produce `build/traceability/traceability_index.json` with stable IDs for automated CI link-completeness validation. Schema: `asx.traceability_index.v1`. Bead: `bd-3gn`.

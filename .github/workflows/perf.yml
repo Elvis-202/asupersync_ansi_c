@@ -64,6 +64,25 @@ jobs:
             --run-id "${{ env.ASX_CI_RUN_TAG }}" \
             --strict
 
+      - name: Build (HFT profile)
+        id: build_hft
+        run: make release PROFILE=HFT
+
+      - name: Run benchmarks (HFT JSON)
+        id: run_bench_hft
+        run: make bench-json PROFILE=HFT > bench-results-hft.json
+
+      - name: Evaluate HFT SLO gates
+        id: slo_gate_hft
+        run: |
+          mkdir -p build/perf
+          tools/ci/evaluate_slo_gates.sh \
+            --bench-json bench-results-hft.json \
+            --profile HFT \
+            --output build/perf/slo_gate_hft_report.json \
+            --run-id "${{ env.ASX_CI_RUN_TAG }}-hft" \
+            --strict
+
       - name: Evaluate size and cold-start gates
         id: size_gate
         run: |
@@ -104,8 +123,11 @@ jobs:
             first_failure="validate-bench-artifacts"
             rerun="ls -l bench-results.json"
           elif [ "${{ steps.slo_gate.outcome }}" = "failure" ]; then
-            first_failure="slo-gate"
+            first_failure="slo-gate-core"
             rerun="tools/ci/evaluate_slo_gates.sh --bench-json bench-results.json --strict"
+          elif [ "${{ steps.slo_gate_hft.outcome }}" = "failure" ]; then
+            first_failure="slo-gate-hft"
+            rerun="tools/ci/evaluate_slo_gates.sh --bench-json bench-results-hft.json --profile HFT --strict"
           elif [ "${{ steps.size_gate.outcome }}" = "failure" ]; then
             first_failure="size-gate"
             rerun="tools/ci/evaluate_size_gates.sh --lib build/lib/libasx.a --bench-json bench-results.json --strict"
@@ -128,6 +150,7 @@ jobs:
             --arg bench_json_outcome "${{ steps.run_bench_json.outcome }}" \
             --arg validate_outcome "${{ steps.validate_manifest.outcome }}" \
             --arg slo_outcome "${{ steps.slo_gate.outcome }}" \
+            --arg slo_hft_outcome "${{ steps.slo_gate_hft.outcome }}" \
             --arg size_outcome "${{ steps.size_gate.outcome }}" \
             --arg first_failure "$first_failure" \
             --arg rerun "$rerun" \
@@ -143,7 +166,8 @@ jobs:
                 {id: "bench", outcome: $bench_outcome, rerun: "make bench"},
                 {id: "bench-json", outcome: $bench_json_outcome, rerun: "make bench-json > bench-results.json"},
                 {id: "validate-bench-artifacts", outcome: $validate_outcome, rerun: "ls -l bench-results.json"},
-                {id: "slo-gate", outcome: $slo_outcome, rerun: "tools/ci/evaluate_slo_gates.sh --bench-json bench-results.json --strict"},
+                {id: "slo-gate-core", outcome: $slo_outcome, rerun: "tools/ci/evaluate_slo_gates.sh --bench-json bench-results.json --strict"},
+                {id: "slo-gate-hft", outcome: $slo_hft_outcome, rerun: "tools/ci/evaluate_slo_gates.sh --bench-json bench-results-hft.json --profile HFT --strict"},
                 {id: "size-gate", outcome: $size_outcome, rerun: "tools/ci/evaluate_size_gates.sh --lib build/lib/libasx.a --bench-json bench-results.json --strict"}
               ],
               first_failure: (if $first_failure == "" then null else {step: $first_failure, rerun: $rerun} end)
@@ -156,6 +180,7 @@ jobs:
           name: perf-tail-deadline-${{ env.ASX_CI_RUN_TAG }}
           path: |
             bench-results.json
+            bench-results-hft.json
             build/bench/
             build/perf/
             tools/ci/artifacts/evidence/
