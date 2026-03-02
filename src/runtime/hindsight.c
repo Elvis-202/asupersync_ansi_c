@@ -57,14 +57,15 @@ void asx_hindsight_log(asx_nd_event_kind kind,
     uint32_t idx = g_write_index % ASX_HINDSIGHT_CAPACITY;
     asx_hindsight_event *e = &g_ring[idx];
 
-    e->sequence = g_next_sequence++;
+    e->sequence = g_next_sequence;
+    if (g_next_sequence < UINT32_MAX) g_next_sequence++;
     e->kind = kind;
     e->entity_id = entity_id;
     e->observed_value = observed_value;
     e->trace_seq = asx_trace_event_count();
 
     g_write_index++;
-    g_total_count++;
+    if (g_total_count < UINT32_MAX) g_total_count++;
 }
 
 /* -------------------------------------------------------------------
@@ -262,6 +263,30 @@ static uint64_t hs_fnv1a_mix(uint64_t hash, const void *data, uint32_t len)
     return hash;
 }
 
+static uint64_t hs_fnv1a_mix_u32(uint64_t hash, uint32_t v)
+{
+    uint8_t bytes[4];
+    bytes[0] = (uint8_t)(v & 0xFFu);
+    bytes[1] = (uint8_t)((v >> 8) & 0xFFu);
+    bytes[2] = (uint8_t)((v >> 16) & 0xFFu);
+    bytes[3] = (uint8_t)((v >> 24) & 0xFFu);
+    return hs_fnv1a_mix(hash, bytes, 4);
+}
+
+static uint64_t hs_fnv1a_mix_u64(uint64_t hash, uint64_t v)
+{
+    uint8_t bytes[8];
+    bytes[0] = (uint8_t)(v & 0xFFu);
+    bytes[1] = (uint8_t)((v >> 8) & 0xFFu);
+    bytes[2] = (uint8_t)((v >> 16) & 0xFFu);
+    bytes[3] = (uint8_t)((v >> 24) & 0xFFu);
+    bytes[4] = (uint8_t)((v >> 32) & 0xFFu);
+    bytes[5] = (uint8_t)((v >> 40) & 0xFFu);
+    bytes[6] = (uint8_t)((v >> 48) & 0xFFu);
+    bytes[7] = (uint8_t)((v >> 56) & 0xFFu);
+    return hs_fnv1a_mix(hash, bytes, 8);
+}
+
 uint64_t asx_hindsight_digest(void)
 {
     uint64_t hash = 0x517cc1b727220a95ULL;
@@ -275,11 +300,11 @@ uint64_t asx_hindsight_digest(void)
         uint32_t k;
         if (!asx_hindsight_get(i, &ev)) break;
         k = (uint32_t)ev.kind;
-        hash = hs_fnv1a_mix(hash, &ev.sequence, sizeof(ev.sequence));
-        hash = hs_fnv1a_mix(hash, &k, sizeof(k));
-        hash = hs_fnv1a_mix(hash, &ev.entity_id, sizeof(ev.entity_id));
-        hash = hs_fnv1a_mix(hash, &ev.observed_value, sizeof(ev.observed_value));
-        hash = hs_fnv1a_mix(hash, &ev.trace_seq, sizeof(ev.trace_seq));
+        hash = hs_fnv1a_mix_u32(hash, ev.sequence);
+        hash = hs_fnv1a_mix_u32(hash, k);
+        hash = hs_fnv1a_mix_u64(hash, ev.entity_id);
+        hash = hs_fnv1a_mix_u64(hash, ev.observed_value);
+        hash = hs_fnv1a_mix_u32(hash, ev.trace_seq);
     }
 
     return hash;

@@ -187,7 +187,7 @@ int asx_timer_cancel(asx_timer_wheel *wheel,
 
     /* Logical cancel: mark dead */
     s->alive = 0;
-    wheel->active_count--;
+    if (wheel->active_count > 0) wheel->active_count--;
 
     return 1;
 }
@@ -262,7 +262,7 @@ uint32_t asx_timer_collect_expired(asx_timer_wheel *wheel,
         asx_timer_slot *s = &wheel->slots[cand_idx[i]];
         out_wakers[i] = s->waker_data;
         s->alive = 0;
-        wheel->active_count--;
+        if (wheel->active_count > 0) wheel->active_count--;
     }
 
     return count;

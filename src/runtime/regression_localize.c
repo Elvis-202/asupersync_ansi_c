@@ -80,7 +80,8 @@ void asx_perf_snapshot_build(asx_perf_snapshot *snap)
 
 static uint32_t abs_i32(int32_t v)
 {
-    return (v < 0) ? (uint32_t)(-v) : (uint32_t)v;
+    /* Widen to int64_t before negation to avoid UB when v == INT32_MIN */
+    return (v < 0) ? (uint32_t)(-(int64_t)v) : (uint32_t)v;
 }
 
 void asx_regression_localize(const asx_perf_snapshot *baseline,
@@ -132,7 +133,7 @@ void asx_regression_localize(const asx_perf_snapshot *baseline,
 
         if (ed == 0 && ad == 0) continue;
 
-        score = (abs_i32(ed) * 100u) / max_delta;
+        score = (uint32_t)(((uint64_t)abs_i32(ed) * 100u) / max_delta);
 
         report->suspects[report->suspect_count].id = (asx_subsystem_id)i;
         report->suspects[report->suspect_count].event_delta = ed;
@@ -202,12 +203,12 @@ void asx_cb_record_success(asx_cb_context *ctx, const asx_cb_config *cfg)
         break;
 
     case ASX_CB_HALF_OPEN:
-        ctx->consecutive_successes++;
+        if (ctx->consecutive_successes < UINT32_MAX) ctx->consecutive_successes++;
         if (ctx->consecutive_successes >= c->recovery_probes) {
             ctx->state = ASX_CB_CLOSED;
             ctx->consecutive_failures = 0;
             ctx->consecutive_successes = 0;
-            ctx->total_recoveries++;
+            if (ctx->total_recoveries < UINT32_MAX) ctx->total_recoveries++;
         }
         break;
     }
@@ -222,11 +223,11 @@ void asx_cb_record_failure(asx_cb_context *ctx, const asx_cb_config *cfg)
 
     switch (ctx->state) {
     case ASX_CB_CLOSED:
-        ctx->consecutive_failures++;
+        if (ctx->consecutive_failures < UINT32_MAX) ctx->consecutive_failures++;
         if (ctx->consecutive_failures >= c->failure_threshold) {
             ctx->state = ASX_CB_OPEN;
             ctx->events_since_trip = 0;
-            ctx->total_trips++;
+            if (ctx->total_trips < UINT32_MAX) ctx->total_trips++;
         }
         break;
 
@@ -239,7 +240,7 @@ void asx_cb_record_failure(asx_cb_context *ctx, const asx_cb_config *cfg)
         ctx->state = ASX_CB_OPEN;
         ctx->events_since_trip = 0;
         ctx->consecutive_successes = 0;
-        ctx->total_trips++;
+        if (ctx->total_trips < UINT32_MAX) ctx->total_trips++;
         break;
     }
 }
@@ -252,7 +253,7 @@ void asx_cb_tick(asx_cb_context *ctx, const asx_cb_config *cfg)
     c = (cfg != NULL) ? cfg : &g_cb_defaults;
 
     if (ctx->state == ASX_CB_OPEN) {
-        ctx->events_since_trip++;
+        if (ctx->events_since_trip < UINT32_MAX) ctx->events_since_trip++;
         if (ctx->events_since_trip >= c->cooldown_events) {
             ctx->state = ASX_CB_HALF_OPEN;
             ctx->consecutive_successes = 0;

@@ -157,7 +157,9 @@ static void populate_router_annotations(asx_adapter_result *res,
     res->annotations.router.headroom =
         (capacity > used) ? capacity - used : 0;
     if (triggered) {
-        g_router_reject_streak++;
+        if (g_router_reject_streak < UINT32_MAX) {
+            g_router_reject_streak++;
+        }
     } else {
         g_router_reject_streak = 0;
     }

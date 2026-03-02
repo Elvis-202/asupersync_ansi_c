@@ -141,6 +141,8 @@ static void *asx_region_capture_alloc(asx_region_slot *region, uint32_t size, ui
     uint32_t end;
 
     if (size == 0u || old_used_out == NULL) return NULL;
+    /* Guard against overflow in alignment: reject sizes that would wrap */
+    if (size > ASX_REGION_CAPTURE_ARENA_BYTES) return NULL;
 
     *old_used_out = region->capture_used;
     start = asx_align_up_u32(region->capture_used, 8u);

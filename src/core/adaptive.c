@@ -117,7 +117,9 @@ static void write_ledger(const asx_adaptive_surface *surface,
     }
 
     g_ledger_write++;
-    g_ledger_total++;
+    if (g_ledger_total < UINT32_MAX) {
+        g_ledger_total++;
+    }
 }
 
 asx_status asx_adaptive_decide(
@@ -281,6 +283,14 @@ uint64_t asx_adaptive_ledger_digest(void)
         LEDGER_HASH_U32(e->decision.cf_loss_fp16);
         LEDGER_HASH_U32((uint32_t)e->decision.used_fallback);
         LEDGER_HASH_U32(e->decision.confidence_fp32);
+
+        LEDGER_HASH_U32((uint32_t)e->evidence_count);
+        {
+            uint8_t j;
+            for (j = 0; j < e->evidence_count; j++) {
+                LEDGER_HASH_U32(e->evidence[j].value_fp32);
+            }
+        }
 #undef LEDGER_HASH_U32
         /* Include sequence */
         hash ^= (uint64_t)e->sequence;

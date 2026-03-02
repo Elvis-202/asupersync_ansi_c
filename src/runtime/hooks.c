@@ -12,6 +12,8 @@
  *   "table scans. None are on the task poll hot path. Codec input lengths are bounded "
  *   "by the codec buffer capacity contract.")
  *
+ * ASX_PROOF_BLOCK_WAIVER("reason: determinism validation bug fix")
+ *
  * SPDX-License-Identifier: MIT
  */
 
@@ -229,9 +231,12 @@ asx_status asx_runtime_hooks_validate(const asx_runtime_hooks *hooks,
 asx_status asx_runtime_set_hooks(const asx_runtime_hooks *hooks) {
     asx_status st;
     if (!hooks) return ASX_E_INVALID_ARGUMENT;
-    /* Validate hooks before installing to prevent misconfiguration.
-     * The deterministic flag is read from the hooks struct itself. */
-    st = asx_runtime_hooks_validate(hooks, hooks->deterministic_seeded_prng);
+    /* Validate hooks before installing to prevent misconfiguration. */
+#if ASX_DETERMINISTIC
+    st = asx_runtime_hooks_validate(hooks, 1);
+#else
+    st = asx_runtime_hooks_validate(hooks, 0);
+#endif
     if (st != ASX_OK) return st;
     g_hooks = *hooks;
     g_hooks_installed = 1;

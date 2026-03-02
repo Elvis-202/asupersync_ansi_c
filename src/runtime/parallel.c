@@ -419,7 +419,7 @@ asx_status asx_parallel_run(asx_region_id region, asx_budget *budget)
                     t->cancel_phase = ASX_CANCEL_PHASE_COMPLETED;
                     t->outcome = asx_outcome_make(ASX_OUTCOME_CANCELLED);
                     asx_task_release_capture_internal(t);
-                    rslot->task_count--;
+                    if (rslot->task_count > 0) rslot->task_count--;
                     lane_remove_internal(tid);
                     g_workers[0].tasks_completed++;
                     asx_trace_emit(ASX_TRACE_SCHED_COMPLETE,
@@ -434,7 +434,7 @@ asx_status asx_parallel_run(asx_region_id region, asx_budget *budget)
                     t->cancel_phase = ASX_CANCEL_PHASE_COMPLETED;
                     t->outcome = asx_outcome_make(ASX_OUTCOME_CANCELLED);
                     asx_task_release_capture_internal(t);
-                    rslot->task_count--;
+                    if (rslot->task_count > 0) rslot->task_count--;
                     lane_remove_internal(tid);
                     g_workers[0].tasks_completed++;
                     asx_trace_emit(ASX_TRACE_SCHED_COMPLETE,
@@ -473,7 +473,7 @@ asx_status asx_parallel_run(asx_region_id region, asx_budget *budget)
                         t->cancel_pending ? ASX_OUTCOME_CANCELLED
                                           : ASX_OUTCOME_OK);
                     asx_task_release_capture_internal(t);
-                    rslot->task_count--;
+                    if (rslot->task_count > 0) rslot->task_count--;
                     lane_remove_internal(tid);
                     g_workers[0].tasks_completed++;
                     asx_trace_emit(ASX_TRACE_SCHED_COMPLETE,
@@ -490,7 +490,7 @@ asx_status asx_parallel_run(asx_region_id region, asx_budget *budget)
                         t->cancel_pending ? ASX_OUTCOME_CANCELLED
                                           : ASX_OUTCOME_ERR);
                     asx_task_release_capture_internal(t);
-                    rslot->task_count--;
+                    if (rslot->task_count > 0) rslot->task_count--;
                     lane_remove_internal(tid);
                     g_workers[0].tasks_completed++;
                     asx_trace_emit(ASX_TRACE_SCHED_COMPLETE,

@@ -42,8 +42,19 @@ asx_cancel_reason asx_cancel_strengthen(
     const asx_cancel_reason *a,
     const asx_cancel_reason *b
 ) {
-    int sev_a = asx_cancel_severity(a->kind);
-    int sev_b = asx_cancel_severity(b->kind);
+    int sev_a, sev_b;
+    asx_cancel_reason fallback;
+    if (!a && !b) {
+        fallback.kind = ASX_CANCEL_USER;
+        fallback.timestamp = 0;
+        fallback.origin_region = ASX_INVALID_ID;
+        fallback.origin_task = ASX_INVALID_ID;
+        return fallback;
+    }
+    if (!a) return *b;
+    if (!b) return *a;
+    sev_a = asx_cancel_severity(a->kind);
+    sev_b = asx_cancel_severity(b->kind);
     if (sev_a > sev_b) return *a;
     if (sev_b > sev_a) return *b;
     /* Equal severity: earlier timestamp wins */

@@ -298,6 +298,225 @@ TEST(snapshot_null_returns_error) {
     ASSERT_EQ(asx_snapshot_capture(NULL), ASX_E_INVALID_ARGUMENT);
 }
 
+/* ---- Binary export/import ---- */
+
+TEST(trace_binary_export_basic) {
+    uint8_t buf[8192];
+    uint32_t written = 0;
+
+    asx_trace_reset();
+    asx_trace_emit(ASX_TRACE_REGION_OPEN, 0x1000, 0);
+    asx_trace_emit(ASX_TRACE_TASK_SPAWN, 0x2000, 0x1000);
+
+    ASSERT_EQ(asx_trace_export_binary(buf, sizeof(buf), &written), ASX_OK);
+    /* Header(24) + 2 events * 24 = 72 */
+    ASSERT_EQ(written, (uint32_t)72);
+}
+
+TEST(trace_binary_export_null_rejects) {
+    uint32_t written = 0;
+    uint8_t buf[128];
+
+    ASSERT_EQ(asx_trace_export_binary(NULL, 128, &written),
+              ASX_E_INVALID_ARGUMENT);
+    ASSERT_EQ(asx_trace_export_binary(buf, 128, NULL),
+              ASX_E_INVALID_ARGUMENT);
+}
+
+TEST(trace_binary_export_too_small) {
+    uint8_t buf[10];
+    uint32_t written = 0;
+
+    asx_trace_reset();
+    asx_trace_emit(ASX_TRACE_SCHED_POLL, 1, 0);
+
+    ASSERT_EQ(asx_trace_export_binary(buf, sizeof(buf), &written),
+              ASX_E_BUFFER_TOO_SMALL);
+}
+
+TEST(trace_binary_roundtrip) {
+    uint8_t buf[8192];
+    uint32_t written = 0;
+    asx_replay_result result;
+
+    asx_trace_reset();
+    asx_trace_emit(ASX_TRACE_SCHED_POLL, 42, 7);
+    asx_trace_emit(ASX_TRACE_SCHED_COMPLETE, 42, 0);
+    asx_trace_emit(ASX_TRACE_SCHED_QUIESCENT, 0, 0);
+
+    ASSERT_EQ(asx_trace_export_binary(buf, sizeof(buf), &written), ASX_OK);
+
+    /* Import as reference */
+    ASSERT_EQ(asx_trace_import_binary(buf, written), ASX_OK);
+
+    /* Re-emit same events and verify */
+    asx_trace_reset();
+    asx_trace_emit(ASX_TRACE_SCHED_POLL, 42, 7);
+    asx_trace_emit(ASX_TRACE_SCHED_COMPLETE, 42, 0);
+    asx_trace_emit(ASX_TRACE_SCHED_QUIESCENT, 0, 0);
+
+    result = asx_replay_verify();
+    ASSERT_EQ(result.result, ASX_REPLAY_MATCH);
+
+    asx_replay_clear_reference();
+}
+
+TEST(trace_binary_import_null_rejects) {
+    ASSERT_EQ(asx_trace_import_binary(NULL, 100), ASX_E_INVALID_ARGUMENT);
+}
+
+TEST(trace_binary_import_truncated) {
+    uint8_t buf[10] = {0};
+    ASSERT_EQ(asx_trace_import_binary(buf, 10), ASX_E_INVALID_ARGUMENT);
+}
+
+TEST(trace_continuity_check_match) {
+    uint8_t buf[8192];
+    uint32_t written = 0;
+
+    asx_trace_reset();
+    asx_trace_emit(ASX_TRACE_REGION_OPEN, 1, 0);
+    asx_trace_emit(ASX_TRACE_TASK_SPAWN, 2, 1);
+
+    ASSERT_EQ(asx_trace_export_binary(buf, sizeof(buf), &written), ASX_OK);
+
+    /* Same events still in trace ring → continuity check should pass */
+    ASSERT_EQ(asx_trace_continuity_check(buf, written), ASX_OK);
+
+    asx_replay_clear_reference();
+}
+
+/* ---- Aux mismatch detection ---- */
+
+TEST(replay_detects_aux_mismatch) {
+    asx_trace_event ref[1];
+    asx_replay_result result;
+
+    asx_trace_reset();
+    asx_trace_emit(ASX_TRACE_SCHED_POLL, 42, 100);
+    asx_trace_event_get(0, &ref[0]);
+
+    ASSERT_EQ(asx_replay_load_reference(ref, 1), ASX_OK);
+
+    asx_trace_reset();
+    asx_trace_emit(ASX_TRACE_SCHED_POLL, 42, 999); /* wrong aux */
+
+    result = asx_replay_verify();
+    ASSERT_EQ(result.result, ASX_REPLAY_AUX_MISMATCH);
+    ASSERT_EQ(result.divergence_index, (uint32_t)0);
+
+    asx_replay_clear_reference();
+}
+
+/* ---- Ring buffer wrap ---- */
+
+TEST(trace_ring_drops_beyond_capacity) {
+    uint32_t i;
+    asx_trace_event ev;
+
+    asx_trace_reset();
+
+    /* Fill beyond capacity — events past cap are silently dropped */
+    for (i = 0; i < ASX_TRACE_CAPACITY + 10u; i++) {
+        asx_trace_emit(ASX_TRACE_SCHED_POLL, (uint64_t)i, 0);
+    }
+
+    /* Readable count is capped at capacity */
+    ASSERT_EQ(asx_trace_event_count(), ASX_TRACE_CAPACITY);
+
+    /* First event is still index 0 (no wrap — fill-once ring) */
+    ASSERT_TRUE(asx_trace_event_get(0, &ev));
+    ASSERT_EQ(ev.entity_id, (uint64_t)0);
+
+    /* Last readable is capacity - 1 */
+    ASSERT_TRUE(asx_trace_event_get(ASX_TRACE_CAPACITY - 1, &ev));
+    ASSERT_EQ(ev.entity_id, (uint64_t)(ASX_TRACE_CAPACITY - 1));
+
+    /* Index beyond capacity returns false */
+    ASSERT_TRUE(!asx_trace_event_get(ASX_TRACE_CAPACITY, &ev));
+}
+
+/* ---- Digest sensitivity to aux ---- */
+
+TEST(trace_digest_sensitive_to_aux) {
+    uint64_t d1, d2;
+
+    asx_trace_reset();
+    asx_trace_emit(ASX_TRACE_SCHED_POLL, 1, 100);
+    d1 = asx_trace_digest();
+
+    asx_trace_reset();
+    asx_trace_emit(ASX_TRACE_SCHED_POLL, 1, 200);
+    d2 = asx_trace_digest();
+
+    ASSERT_TRUE(d1 != d2);
+}
+
+TEST(trace_digest_sensitive_to_entity_id) {
+    uint64_t d1, d2;
+
+    asx_trace_reset();
+    asx_trace_emit(ASX_TRACE_SCHED_POLL, 1, 0);
+    d1 = asx_trace_digest();
+
+    asx_trace_reset();
+    asx_trace_emit(ASX_TRACE_SCHED_POLL, 2, 0);
+    d2 = asx_trace_digest();
+
+    ASSERT_TRUE(d1 != d2);
+}
+
+TEST(trace_digest_sensitive_to_order) {
+    uint64_t d1, d2;
+
+    asx_trace_reset();
+    asx_trace_emit(ASX_TRACE_SCHED_POLL, 1, 0);
+    asx_trace_emit(ASX_TRACE_SCHED_COMPLETE, 2, 0);
+    d1 = asx_trace_digest();
+
+    asx_trace_reset();
+    asx_trace_emit(ASX_TRACE_SCHED_COMPLETE, 2, 0);
+    asx_trace_emit(ASX_TRACE_SCHED_POLL, 1, 0);
+    d2 = asx_trace_digest();
+
+    ASSERT_TRUE(d1 != d2);
+}
+
+/* ---- All event kinds emit ---- */
+
+TEST(trace_all_event_kinds) {
+    asx_trace_event ev;
+
+    asx_trace_reset();
+    asx_trace_emit(ASX_TRACE_SCHED_POLL, 0, 0);
+    asx_trace_emit(ASX_TRACE_SCHED_COMPLETE, 0, 0);
+    asx_trace_emit(ASX_TRACE_SCHED_BUDGET, 0, 0);
+    asx_trace_emit(ASX_TRACE_SCHED_QUIESCENT, 0, 0);
+    asx_trace_emit(ASX_TRACE_SCHED_ROUND, 0, 0);
+    asx_trace_emit(ASX_TRACE_REGION_OPEN, 0, 0);
+    asx_trace_emit(ASX_TRACE_REGION_CLOSE, 0, 0);
+    asx_trace_emit(ASX_TRACE_REGION_CLOSED, 0, 0);
+    asx_trace_emit(ASX_TRACE_TASK_SPAWN, 0, 0);
+    asx_trace_emit(ASX_TRACE_TASK_TRANSITION, 0, 0);
+    asx_trace_emit(ASX_TRACE_OBLIGATION_RESERVE, 0, 0);
+    asx_trace_emit(ASX_TRACE_OBLIGATION_COMMIT, 0, 0);
+    asx_trace_emit(ASX_TRACE_OBLIGATION_ABORT, 0, 0);
+    asx_trace_emit(ASX_TRACE_CHANNEL_SEND, 0, 0);
+    asx_trace_emit(ASX_TRACE_CHANNEL_RECV, 0, 0);
+    asx_trace_emit(ASX_TRACE_TIMER_SET, 0, 0);
+    asx_trace_emit(ASX_TRACE_TIMER_FIRE, 0, 0);
+    asx_trace_emit(ASX_TRACE_TIMER_CANCEL, 0, 0);
+
+    ASSERT_EQ(asx_trace_event_count(), (uint32_t)18);
+
+    /* Spot check a few kinds */
+    ASSERT_TRUE(asx_trace_event_get(5, &ev));
+    ASSERT_EQ(ev.kind, ASX_TRACE_REGION_OPEN);
+
+    ASSERT_TRUE(asx_trace_event_get(15, &ev));
+    ASSERT_EQ(ev.kind, ASX_TRACE_TIMER_SET);
+}
+
 /* ---- String helpers ---- */
 
 TEST(trace_event_kind_str_all_kinds) {
@@ -333,6 +552,19 @@ int main(void) {
     RUN_TEST(snapshot_capture_with_region);
     RUN_TEST(snapshot_digest_deterministic);
     RUN_TEST(snapshot_null_returns_error);
+    RUN_TEST(trace_binary_export_basic);
+    RUN_TEST(trace_binary_export_null_rejects);
+    RUN_TEST(trace_binary_export_too_small);
+    RUN_TEST(trace_binary_roundtrip);
+    RUN_TEST(trace_binary_import_null_rejects);
+    RUN_TEST(trace_binary_import_truncated);
+    RUN_TEST(trace_continuity_check_match);
+    RUN_TEST(replay_detects_aux_mismatch);
+    RUN_TEST(trace_ring_drops_beyond_capacity);
+    RUN_TEST(trace_digest_sensitive_to_aux);
+    RUN_TEST(trace_digest_sensitive_to_entity_id);
+    RUN_TEST(trace_digest_sensitive_to_order);
+    RUN_TEST(trace_all_event_kinds);
     RUN_TEST(trace_event_kind_str_all_kinds);
     RUN_TEST(replay_result_kind_str_all_kinds);
 

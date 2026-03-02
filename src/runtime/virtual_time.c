@@ -105,13 +105,17 @@ asx_time asx_vtime_now_ns(void *ctx)
     /* Check for active stall */
     if (vt->stall_remaining > 0) {
         vt->stall_remaining--;
-        vt->query_count++;
+        if (vt->query_count < UINT32_MAX) vt->query_count++;
         return vt->current_time; /* Time does not advance */
     }
 
-    /* Normal tick advance */
+    /* Normal tick advance with overflow saturation */
     if (query > 0) {
-        vt->current_time += vt->tick_ns;
+        if (vt->current_time <= UINT64_MAX - vt->tick_ns) {
+            vt->current_time += vt->tick_ns;
+        } else {
+            vt->current_time = UINT64_MAX;
+        }
     }
 
     /* Apply anomalies for this query */
@@ -123,9 +127,20 @@ asx_time asx_vtime_now_ns(void *ctx)
         switch (a->kind) {
         case ASX_VTIME_ANOMALY_JITTER:
             if (a->param >= 0) {
-                vt->current_time += (asx_time)a->param;
+                asx_time add = (asx_time)a->param;
+                if (vt->current_time <= UINT64_MAX - add) {
+                    vt->current_time += add;
+                } else {
+                    vt->current_time = UINT64_MAX;
+                }
             } else {
-                asx_time abs_delta = (asx_time)(-(a->param));
+                /* Avoid UB: widen before negation for INT64_MIN safety */
+                uint64_t abs_delta;
+                if (a->param == (-9223372036854775807LL - 1)) {
+                    abs_delta = (uint64_t)9223372036854775808ULL;
+                } else {
+                    abs_delta = (uint64_t)(-(a->param));
+                }
                 if (vt->current_time >= abs_delta) {
                     vt->current_time -= abs_delta;
                 } else {
@@ -139,13 +154,21 @@ asx_time asx_vtime_now_ns(void *ctx)
             vt->stall_remaining = a->duration;
             break;
 
-        case ASX_VTIME_ANOMALY_JUMP:
-            vt->current_time += (asx_time)a->param;
+        case ASX_VTIME_ANOMALY_JUMP: {
+            asx_time jump = (asx_time)a->param;
+            if (vt->current_time <= UINT64_MAX - jump) {
+                vt->current_time += jump;
+            } else {
+                vt->current_time = UINT64_MAX;
+            }
+            break;
+        }
+        default:
             break;
         }
     }
 
-    vt->query_count++;
+    if (vt->query_count < UINT32_MAX) vt->query_count++;
     return vt->current_time;
 }
 

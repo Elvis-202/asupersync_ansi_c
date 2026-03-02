@@ -18,6 +18,8 @@
 
 /* ASX_CHECKPOINT_WAIVER_FILE() -- seqlock/EBR spike, no checkpoint coverage needed */
 
+/* ASX_PROOF_BLOCK_WAIVER("reason: bug fixes for infinite loop and benchmark reporting") */
+
 #include <asx/asx.h>
 #include <string.h>
 
@@ -188,6 +190,10 @@ int asx_seqlock_read(const asx_seqlock *sl, void *out, uint32_t size)
         memcpy(out, sl->data, read_size);
         asx_fence_acquire();
         s2 = seqlock_atomic_load(&sl->sequence);
+        if (s1 != s2) {
+            retries++;
+            if (retries >= max_retries) return 0;
+        }
     } while (s1 != s2);
 
     return (retries == 0) ? 1 : 0;
@@ -583,16 +589,19 @@ void asx_concurrency_bench_run(asx_concurrency_bench *bench, uint32_t rounds)
     t1 = bench_rdtsc();
     bench->spinlock_read_cycles = t1 - t0;
 
-    /* Reset counters for raw benchmark */
+    /* 3. Raw (unprotected) benchmark — lower bound */
     bench->read_ops = 0;
     bench->write_ops = 0;
-
-    /* 3. Raw (unprotected) benchmark — lower bound */
     t0 = bench_rdtsc();
     for (i = 0; i < rounds; i++) {
         memcpy(&snapshot, &md, sizeof(snapshot));
         bench->read_ops++;
+    }
+    t1 = bench_rdtsc();
+    bench->raw_read_cycles = t1 - t0;
 
+    t0 = bench_rdtsc();
+    for (i = 0; i < rounds; i++) {
         if ((i & 0xFu) == 0) {
             md.state = i & 0x5u;
             md.cancel_epoch = i;
@@ -600,5 +609,5 @@ void asx_concurrency_bench_run(asx_concurrency_bench *bench, uint32_t rounds)
         }
     }
     t1 = bench_rdtsc();
-    bench->raw_read_cycles = t1 - t0;
+    bench->raw_write_cycles = t1 - t0;
 }

@@ -91,7 +91,11 @@ static void ghost_record_violation(asx_ghost_violation_kind kind,
     v->sequence   = g_ghost_ring_count;
 
     g_ghost_ring_write = (g_ghost_ring_write + 1u) % ASX_GHOST_RING_CAPACITY;
-    g_ghost_ring_count++;
+    /* Saturate count at UINT32_MAX to prevent wrap-around that would
+     * cause asx_ghost_violation_count() to return 0 after overflow */
+    if (g_ghost_ring_count < UINT32_MAX) {
+        g_ghost_ring_count++;
+    }
     if (g_ghost_ring_count > ASX_GHOST_RING_CAPACITY) {
         g_ghost_ring_overflow = 1;
     }

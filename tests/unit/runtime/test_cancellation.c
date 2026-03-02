@@ -12,6 +12,7 @@
 #include <asx/runtime/runtime.h>
 #include <asx/core/cancel.h>
 #include <asx/core/ghost.h>
+#include "../../../src/runtime/runtime_internal.h"
 
 /* Suppress warn_unused_result for intentionally-ignored scheduler calls.
  * GCC's (void) cast does not silence warn_unused_result under -Werror. */
@@ -591,6 +592,43 @@ TEST(cancel_storm_all_tasks_resolve) {
 }
 
 /* -------------------------------------------------------------------
+ * Test: cancel_propagate preserves stronger cancel's origin (C4 fix)
+ *
+ * If a task already has a stronger cancel (e.g. SHUTDOWN) with origin
+ * attribution, a weaker propagate (e.g. PARENT) must NOT overwrite
+ * the existing origin_region.
+ * ------------------------------------------------------------------- */
+
+TEST(cancel_propagate_preserves_stronger_origin) {
+    asx_region_id rid, rid_other;
+    asx_task_id tid;
+    asx_task_slot *t;
+    asx_budget budget;
+
+    asx_runtime_reset();
+
+    ASSERT_EQ(asx_region_open(&rid), ASX_OK);
+    ASSERT_EQ(asx_region_open(&rid_other), ASX_OK);
+    ASSERT_EQ(asx_task_spawn(rid, poll_pending, NULL, &tid), ASX_OK);
+
+    /* Run once to make it Running */
+    budget = asx_budget_from_polls(1);
+    SCHED_RUN_IGNORE(rid, &budget);
+
+    /* First: strong cancel (SHUTDOWN) with origin from rid_other */
+    ASSERT_EQ(asx_task_cancel_with_origin(tid, ASX_CANCEL_SHUTDOWN,
+                                           rid_other, ASX_INVALID_ID), ASX_OK);
+
+    /* Now propagate a weaker cancel (PARENT) from rid */
+    (void)asx_cancel_propagate(rid, ASX_CANCEL_PARENT);
+
+    /* The stronger cancel's origin_region should be preserved */
+    ASSERT_EQ(asx_task_slot_lookup(tid, &t), ASX_OK);
+    ASSERT_EQ((int)t->cancel_reason.kind, (int)ASX_CANCEL_SHUTDOWN);
+    ASSERT_TRUE(t->cancel_reason.origin_region == rid_other);
+}
+
+/* -------------------------------------------------------------------
  * Test: cancel propagation sets origin region
  * ------------------------------------------------------------------- */
 
@@ -719,6 +757,7 @@ int main(void) {
     RUN_TEST(scheduler_decrements_cleanup_budget);
     RUN_TEST(cancel_with_origin_sets_attribution);
     RUN_TEST(cancel_storm_all_tasks_resolve);
+    RUN_TEST(cancel_propagate_preserves_stronger_origin);
     RUN_TEST(cancel_propagation_sets_origin_region);
     RUN_TEST(scheduler_quiesces_after_cancel_completion);
     RUN_TEST(cleanup_budget_tighter_for_severe_cancels);

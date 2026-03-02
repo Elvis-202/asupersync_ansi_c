@@ -13,6 +13,8 @@
  *
  * Semantics specified in docs/CHANNEL_TIMER_KERNEL_SEMANTICS.md.
  *
+ * ASX_PROOF_BLOCK_WAIVER("reason: bug fix for recv after close, no semantic break")
+ *
  * SPDX-License-Identifier: MIT
  */
 
@@ -463,9 +465,15 @@ asx_status asx_channel_try_recv(asx_channel_id id, uint64_t *out_value)
         return ASX_OK;
     }
 
-    if (s->state == ASX_CHANNEL_SENDER_CLOSED ||
+    if (s->state == ASX_CHANNEL_RECEIVER_CLOSED ||
         s->state == ASX_CHANNEL_FULLY_CLOSED) {
         return ASX_E_DISCONNECTED;
+    }
+
+    if (s->state == ASX_CHANNEL_SENDER_CLOSED) {
+        if (s->reserved == 0) {
+            return ASX_E_DISCONNECTED;
+        }
     }
 
     return ASX_E_WOULD_BLOCK;

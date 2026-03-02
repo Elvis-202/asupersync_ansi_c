@@ -381,6 +381,80 @@ TEST(recv_after_sender_closed_empty)
     ASSERT_EQ(asx_channel_try_recv(ch, &val), ASX_E_DISCONNECTED);
 }
 
+TEST(recv_sender_closed_with_pending_reserve)
+{
+    /* When sender is closed but a reserved permit is still outstanding,
+     * recv should return WOULD_BLOCK (not DISCONNECTED) because the
+     * permit holder may still call send. */
+    asx_channel_id ch;
+    asx_send_permit p;
+    uint64_t val;
+    setup();
+    ASSERT_EQ(asx_channel_create(g_rid, 4, &ch), ASX_OK);
+
+    ASSERT_EQ(asx_channel_try_reserve(ch, &p), ASX_OK);
+    ASSERT_EQ(asx_channel_close_sender(ch), ASX_OK);
+
+    /* Queue is empty but there's a pending reserve → WOULD_BLOCK */
+    ASSERT_EQ(asx_channel_try_recv(ch, &val), ASX_E_WOULD_BLOCK);
+
+    /* Complete the send */
+    ASSERT_EQ(asx_send_permit_send(&p, 55), ASX_OK);
+
+    /* Now the data is available */
+    ASSERT_EQ(asx_channel_try_recv(ch, &val), ASX_OK);
+    ASSERT_EQ(val, 55u);
+
+    /* No more reserves, no more data → DISCONNECTED */
+    ASSERT_EQ(asx_channel_try_recv(ch, &val), ASX_E_DISCONNECTED);
+}
+
+TEST(recv_sender_closed_pending_reserve_abort)
+{
+    /* When the pending reserve is aborted (not sent), recv should
+     * transition to DISCONNECTED once reserved count hits zero. */
+    asx_channel_id ch;
+    asx_send_permit p;
+    uint64_t val;
+    setup();
+    ASSERT_EQ(asx_channel_create(g_rid, 4, &ch), ASX_OK);
+
+    ASSERT_EQ(asx_channel_try_reserve(ch, &p), ASX_OK);
+    ASSERT_EQ(asx_channel_close_sender(ch), ASX_OK);
+
+    /* Pending reserve → WOULD_BLOCK */
+    ASSERT_EQ(asx_channel_try_recv(ch, &val), ASX_E_WOULD_BLOCK);
+
+    /* Abort the permit instead of sending */
+    asx_send_permit_abort(&p);
+
+    /* No more reserves, queue empty → DISCONNECTED */
+    ASSERT_EQ(asx_channel_try_recv(ch, &val), ASX_E_DISCONNECTED);
+}
+
+TEST(recv_after_receiver_closed)
+{
+    /* Recv after the receiver side is closed → DISCONNECTED */
+    asx_channel_id ch;
+    uint64_t val;
+    setup();
+    ASSERT_EQ(asx_channel_create(g_rid, 4, &ch), ASX_OK);
+    ASSERT_EQ(asx_channel_close_receiver(ch), ASX_OK);
+    ASSERT_EQ(asx_channel_try_recv(ch, &val), ASX_E_DISCONNECTED);
+}
+
+TEST(recv_after_fully_closed)
+{
+    /* Recv after both sides closed → DISCONNECTED */
+    asx_channel_id ch;
+    uint64_t val;
+    setup();
+    ASSERT_EQ(asx_channel_create(g_rid, 4, &ch), ASX_OK);
+    ASSERT_EQ(asx_channel_close_sender(ch), ASX_OK);
+    ASSERT_EQ(asx_channel_close_receiver(ch), ASX_OK);
+    ASSERT_EQ(asx_channel_try_recv(ch, &val), ASX_E_DISCONNECTED);
+}
+
 /* -------------------------------------------------------------------
  * Ring buffer wraparound
  * ------------------------------------------------------------------- */
@@ -627,6 +701,10 @@ int main(void)
     RUN_TEST(recv_null_out);
     RUN_TEST(recv_after_sender_closed_with_data);
     RUN_TEST(recv_after_sender_closed_empty);
+    RUN_TEST(recv_sender_closed_with_pending_reserve);
+    RUN_TEST(recv_sender_closed_pending_reserve_abort);
+    RUN_TEST(recv_after_receiver_closed);
+    RUN_TEST(recv_after_fully_closed);
 
     RUN_TEST(ring_buffer_wraparound);
     RUN_TEST(ring_buffer_batch_wraparound);

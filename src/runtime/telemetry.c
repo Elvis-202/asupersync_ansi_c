@@ -40,6 +40,32 @@ static uint64_t telem_fnv1a_mix(uint64_t hash, const void *data, uint32_t len)
     return hash;
 }
 
+/* Endian-safe FNV-1a helpers — serialize to little-endian bytes before
+ * hashing so that digests are identical on LE and BE platforms (bd-3h6). */
+static uint64_t telem_fnv1a_mix_u32(uint64_t hash, uint32_t v)
+{
+    uint8_t bytes[4];
+    bytes[0] = (uint8_t)(v & 0xFFu);
+    bytes[1] = (uint8_t)((v >> 8) & 0xFFu);
+    bytes[2] = (uint8_t)((v >> 16) & 0xFFu);
+    bytes[3] = (uint8_t)((v >> 24) & 0xFFu);
+    return telem_fnv1a_mix(hash, bytes, 4);
+}
+
+static uint64_t telem_fnv1a_mix_u64(uint64_t hash, uint64_t v)
+{
+    uint8_t bytes[8];
+    bytes[0] = (uint8_t)(v & 0xFFu);
+    bytes[1] = (uint8_t)((v >> 8) & 0xFFu);
+    bytes[2] = (uint8_t)((v >> 16) & 0xFFu);
+    bytes[3] = (uint8_t)((v >> 24) & 0xFFu);
+    bytes[4] = (uint8_t)((v >> 32) & 0xFFu);
+    bytes[5] = (uint8_t)((v >> 40) & 0xFFu);
+    bytes[6] = (uint8_t)((v >> 48) & 0xFFu);
+    bytes[7] = (uint8_t)((v >> 56) & 0xFFu);
+    return telem_fnv1a_mix(hash, bytes, 8);
+}
+
 /* -------------------------------------------------------------------
  * Tier retention policy
  *
@@ -128,23 +154,21 @@ void asx_telemetry_emit(asx_trace_event_kind kind,
 {
     uint32_t k;
 
-    /* Always update rolling digest (tier-independent) */
+    /* Always update rolling digest (tier-independent).
+     * Use endian-safe helpers so digest is identical on LE/BE (bd-3h6). */
     k = (uint32_t)kind;
-    g_rolling_digest = telem_fnv1a_mix(g_rolling_digest,
-                                        &g_rolling_sequence,
-                                        sizeof(g_rolling_sequence));
-    g_rolling_digest = telem_fnv1a_mix(g_rolling_digest, &k, sizeof(k));
-    g_rolling_digest = telem_fnv1a_mix(g_rolling_digest,
-                                        &entity_id, sizeof(entity_id));
-    g_rolling_digest = telem_fnv1a_mix(g_rolling_digest, &aux, sizeof(aux));
-    g_rolling_sequence++;
-    g_emitted_count++;
+    g_rolling_digest = telem_fnv1a_mix_u32(g_rolling_digest, g_rolling_sequence);
+    g_rolling_digest = telem_fnv1a_mix_u32(g_rolling_digest, k);
+    g_rolling_digest = telem_fnv1a_mix_u64(g_rolling_digest, entity_id);
+    g_rolling_digest = telem_fnv1a_mix_u64(g_rolling_digest, aux);
+    if (g_rolling_sequence < UINT32_MAX) g_rolling_sequence++;
+    if (g_emitted_count < UINT32_MAX) g_emitted_count++;
 
     /* Record in trace ring only if tier retains this event kind */
     if (asx_telemetry_retains(g_tier, kind)) {
         asx_trace_emit(kind, entity_id, aux);
     } else {
-        g_filtered_count++;
+        if (g_filtered_count < UINT32_MAX) g_filtered_count++;
     }
 }
 

@@ -40,7 +40,10 @@ static void sched_emit(asx_scheduler_event_kind kind,
         e->sequence = g_event_count;
         e->round = round;
     }
-    g_event_count++;
+    /* Saturate at UINT32_MAX to prevent wrap-around losing event history */
+    if (g_event_count < UINT32_MAX) {
+        g_event_count++;
+    }
 }
 
 uint32_t asx_scheduler_event_count(void)
@@ -134,7 +137,7 @@ asx_status asx_scheduler_run(asx_region_id region, asx_budget *budget)
                 t->cancel_phase = ASX_CANCEL_PHASE_COMPLETED;
                 t->outcome = asx_outcome_make(ASX_OUTCOME_CANCELLED);
                 asx_task_release_capture_internal(t);
-                rslot->task_count--;
+                if (rslot->task_count > 0) rslot->task_count--;
                 active--;
                 sched_emit(ASX_SCHED_EVENT_COMPLETE, tid, round);
                 asx_trace_emit(ASX_TRACE_SCHED_COMPLETE, (uint64_t)tid, round);
@@ -161,7 +164,7 @@ asx_status asx_scheduler_run(asx_region_id region, asx_budget *budget)
                 t->cancel_phase = ASX_CANCEL_PHASE_COMPLETED;
                 t->outcome = asx_outcome_make(ASX_OUTCOME_CANCELLED);
                 asx_task_release_capture_internal(t);
-                rslot->task_count--;
+                if (rslot->task_count > 0) rslot->task_count--;
                 active--;
                 sched_emit(ASX_SCHED_EVENT_CANCEL_FORCED, tid, round);
                 asx_trace_emit(ASX_TRACE_SCHED_COMPLETE, (uint64_t)tid, round);
@@ -202,7 +205,7 @@ asx_status asx_scheduler_run(asx_region_id region, asx_budget *budget)
                     t->outcome = asx_outcome_make(ASX_OUTCOME_OK);
                 }
                 asx_task_release_capture_internal(t);
-                rslot->task_count--;
+                if (rslot->task_count > 0) rslot->task_count--;
                 active--;
                 sched_emit(ASX_SCHED_EVENT_COMPLETE, tid, round);
                 asx_trace_emit(ASX_TRACE_SCHED_COMPLETE, (uint64_t)tid, round);
@@ -219,7 +222,7 @@ asx_status asx_scheduler_run(asx_region_id region, asx_budget *budget)
                     t->outcome = asx_outcome_make(ASX_OUTCOME_ERR);
                 }
                 asx_task_release_capture_internal(t);
-                rslot->task_count--;
+                if (rslot->task_count > 0) rslot->task_count--;
                 active--;
                 sched_emit(ASX_SCHED_EVENT_COMPLETE, tid, round);
                 asx_trace_emit(ASX_TRACE_SCHED_COMPLETE, (uint64_t)tid, round);

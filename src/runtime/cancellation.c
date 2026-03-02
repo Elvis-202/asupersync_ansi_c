@@ -140,9 +140,8 @@ uint32_t asx_cancel_propagate(asx_region_id region, asx_cancel_kind kind)
                               (uint16_t)(1u << (unsigned)t->state),
                               asx_handle_pack_index(t->generation, (uint16_t)i));
 
-        if (asx_task_cancel(tid, kind) == ASX_OK) {
-            /* Set origin region for propagation traceability */
-            t->cancel_reason.origin_region = region;
+        if (asx_task_cancel_with_origin(tid, kind, region,
+                                        ASX_INVALID_ID) == ASX_OK) {
             count++;
         }
     }

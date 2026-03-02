@@ -320,6 +320,7 @@ void asx_adapter_dispatch(asx_adapter_domain domain,
         break;
     }
     case ASX_ADAPTER_DOMAIN_COUNT:
+    default:
         core_fallback_decide(used, capacity, out);
         break;
     }
@@ -398,6 +399,10 @@ int asx_adapter_prove_isomorphism_sweep(asx_adapter_domain domain,
             }
             return 0;
         }
+        /* Prevent infinite loop when capacity == UINT32_MAX:
+         * load++ would wrap to 0 and the loop condition would
+         * remain true forever. Break after testing capacity. */
+        if (load == capacity) break;
     }
     return 1;
 }

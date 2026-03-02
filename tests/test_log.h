@@ -63,7 +63,8 @@ static void tlog_now(void)
     if (gm != NULL) {
         strftime(tlog_ts_buf, sizeof(tlog_ts_buf), "%Y-%m-%dT%H:%M:%SZ", gm);
     } else {
-        strcpy(tlog_ts_buf, "1970-01-01T00:00:00Z");
+        strncpy(tlog_ts_buf, "1970-01-01T00:00:00Z", sizeof(tlog_ts_buf));
+        tlog_ts_buf[sizeof(tlog_ts_buf) - 1] = '\0';
     }
 }
 
