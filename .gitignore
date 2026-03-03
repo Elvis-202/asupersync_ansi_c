@@ -74,3 +74,14 @@ diff.txt
 # bv (beads viewer) local config and caches
 .bv/
 .claude/settings.local.json
+
+# Named build directories (cross-compilation / host-specific outputs)
+build_*/
+
+# SQLite runtime files
+storage.sqlite3
+storage.sqlite3-*
+*.sqlite3.bak
+*.sqlite3.bak-*
+*.sqlite3.corrupt-*
+*.sqlite3-wal.corrupt-*
